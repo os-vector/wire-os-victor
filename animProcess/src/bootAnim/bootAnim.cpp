@@ -21,6 +21,8 @@
 #include <chrono>
 #include <algorithm>
 #include <signal.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #define FRAME_WIDTH_SANTEK  184 
 #define FRAME_HEIGHT_SANTEK 96
@@ -34,6 +36,7 @@ namespace {
   // It is a binary file containing all the frames in the animation in rgb565 format
   static const char* _animPathSantek = "/anki/data/assets/cozmo_resources/config/engine/animations/boot_anim.raw";
   static const char* _animPathMidas = "/anki/data/assets/cozmo_resources/config/engine/animations/boot_anim_20.raw";
+  static const char* _animPathCustom = "/persist/boot_anim.raw";
   bool gShutdown = false;
 }
 
@@ -60,6 +63,11 @@ static void handler(int signum)
   gShutdown = true;
 }
 
+bool custom_exists() {
+  struct stat buffer;   
+  return (stat("/persist/boot_anim.raw", &buffer) == 0);
+}
+
 int main(int argc, char** argv)
 {
   // Setup signal handlers so we can cleanly exit
@@ -80,11 +88,12 @@ int main(int argc, char** argv)
 
   // Open animation file for reading
   const char *anim_path = use_santek_sizes() ? _animPathSantek : _animPathMidas;
+  const char *true_anim_path = custom_exists() ? _animPathCustom : anim_path;
   
-  int fd = open(anim_path, O_RDONLY);
+  int fd = open(true_anim_path, O_RDONLY);
   if(fd < 0)
   {
-    printf("Failed to open %s\n", anim_path);
+    printf("Failed to open %s\n", true_anim_path);
     return -1;
   }
 
