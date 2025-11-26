@@ -132,7 +132,7 @@ void BehaviorHowOldAreYou::OnBehaviorActivated()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 std::chrono::hours BehaviorHowOldAreYou::GetRobotAge()
 {
-  // This used to use the onboarding completion time for date, when authing the dev bot to wp this gets overwritten so instead use when /data/persist was created
+  // This used to use the onboarding completion time for date, when authing the dev bot to wp this gets overwritten so instead use the gateway cert file
   // check whether onboardingState file exists
   // const auto* platform = GetBEI().GetRobotInfo().GetContext()->GetDataPlatform();
   // _saveFolder = "/data/vic-gateway";
@@ -173,7 +173,7 @@ std::chrono::hours BehaviorHowOldAreYou::GetRobotAge()
 
     // if(!parsed || !containsBoD) {
       // if not we couldn't get born on date from file, use modification time of the file
-      onboardingTime_sse = Util::FileUtils::GetFileLastModificationTime( "/data/persist" ); // seconds since the epoch
+      onboardingTime_sse = Util::FileUtils::GetFileLastModificationTime( "/data/vic-gateway/gateway.cert" ); // seconds since the epoch
       LOG_INFO("BehaviorHowOldAreYou.GetRobotAge.ModificationTimeFallback",
           "Using file modification time of vic-gateway certificate (seconds since epoch): %lld",
           onboardingTime_sse);
