@@ -341,6 +341,10 @@ void BehaviorTimerUtilityCoordinator::InitBehavior()
   _iParams.timerAlreadySetBehavior = BC.FindBehaviorByID(BEHAVIOR_ID(SingletonTimerAlreadySet));
   _iParams.iCantDoThatBehavior     = BC.FindBehaviorByID(BEHAVIOR_ID(SingletonICantDoThat));
   SetupTimerBehaviorFunctions();
+  if(GetTimerUtility().WasRestoredThisBoot()){
+    SuppressAnticThisTick(BaseStationTimer::getInstance()->GetTickCount());
+  }
+
 }
 
 
@@ -436,6 +440,7 @@ void BehaviorTimerUtilityCoordinator::BehaviorUpdate()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 bool BehaviorTimerUtilityCoordinator::TimerShouldRing() const
 {
+  GetTimerUtility().PersistTimerIfNeeded();
   auto handle = GetTimerUtility().GetTimerHandle();
   auto secRemain = (handle != nullptr) ? handle->GetTimeRemaining_s() : 0;
   return (handle != nullptr) && (secRemain == 0);

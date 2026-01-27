@@ -86,9 +86,10 @@ public:
   SharedHandle GetTimerHandle() const { return _activeTimer; }
   SharedHandle StartTimer(int timerLength_s);
   void ClearTimer();
+  void PersistTimerIfNeeded();
+  bool WasRestoredThisBoot() const { return _restoredThisBoot; };
 
   int GetSystemTime_s() const;
-
     #if ANKI_DEV_CHEATS
     // "Advance" time by shortening the time remaining
     void AdvanceTimeBySeconds(u32 secondsToAdvance){ if(_activeTimer != nullptr){_activeTimer->AdvanceTimeBySeconds(secondsToAdvance); }}
@@ -96,6 +97,12 @@ public:
 
 private:
   SharedHandle _activeTimer;
+  int _lastPersistTime_s = 0;
+  bool _restoredThisBoot = false;
+
+  void PersistTimerNow();
+  void LoadPersistedTimerIfAllowed();
+  void ClearPersistedTimerFile();
 
 };
 

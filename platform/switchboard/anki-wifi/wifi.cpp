@@ -465,14 +465,18 @@ static gpointer ConnectionThread(gpointer data)
 
 void ConnectCallback(GObject *source_object, GAsyncResult *result, gpointer user_data)
 {
+  Log::Write("mutex5");
   g_mutex_lock(&connectMutex);
+  Log::Write("mutex6");
   struct ConnectInfo* data = (ConnectInfo*)user_data;
 
   conn_man_bus_service_call_connect_finish(data->service,
                                           result,
                                           &data->error);
+  Log::Write("mutex6");
 
   g_cond_signal(data->cond);
+  Log::Write("mutex7");
   g_mutex_unlock(&connectMutex);
 }
 
@@ -964,6 +968,7 @@ ConnectWifiResult ConnectWiFiBySsid(std::string ssid, std::string pw, uint8_t au
   if(service == nullptr) {
     g_variant_unref(services);
     g_variant_unref(serviceVariant);
+    Log::Write("failure1");
     return ConnectWifiResult::CONNECT_FAILURE;
   }
 
@@ -977,13 +982,14 @@ ConnectWifiResult ConnectWiFiBySsid(std::string ssid, std::string pw, uint8_t au
 
   agent_registered = RegisterAgent(&connectInfo);
   if (!agent_registered) {
+    Log::Write("failure2");
     loge("could not register agent, bailing out");
     g_variant_unref(services);
     g_variant_unref(serviceVariant);
     g_object_unref(service);
     return ConnectWifiResult::CONNECT_FAILURE;
   }
-
+  Log::Write("connectingtowifiservice");
   ConnectWifiResult connectStatus = ConnectToWifiService(service);
 
   if(connectInfo.status != ConnectWifiResult::CONNECT_NONE) {
@@ -1008,13 +1014,6 @@ ConnectWifiResult ConnectWiFiBySsid(std::string ssid, std::string pw, uint8_t au
       break;
   }
 
-  DASMSG(wifi_connection_status, "wifi.manual_connect_attempt",
-          "WiFi connection attempt.");
-  DASMSG_SET(s1, statusString, "Connection attempt result");
-  DASMSG_SET(s2, errorString, "Error reason");
-  DASMSG_SET(s3, hidden?"hidden":"visible", "SSID broadcast");
-  DASMSG_SEND();
-
   if (agent_registered) {
     Log::Write("unregistering agent");
     UnregisterAgent(&connectInfo);
@@ -1023,6 +1022,7 @@ ConnectWifiResult ConnectWiFiBySsid(std::string ssid, std::string pw, uint8_t au
   g_variant_unref(services);
   g_variant_unref(serviceVariant);
   g_object_unref(service);
+  Log::Write("gotallthewaydownhere");
 
   return connectStatus;
 }
@@ -1064,21 +1064,23 @@ ConnectWifiResult ConnectToWifiService(ConnManBusService* service) {
   data.cond = &connectCond;
   data.service = service;
 
+  Log::Write("calling connman");
   conn_man_bus_service_call_connect (
     service,
     nullptr,
     ConnectCallback,
     (gpointer)&data);
+  struct ConnectInfo* odata = (ConnectInfo*)(gpointer)&data;
+  GAsyncResult *result = nullptr;
 
-  g_cond_wait(&connectCond, &connectMutex);
-  g_mutex_unlock(&connectMutex);
+  conn_man_bus_service_call_connect_finish(odata->service,
+                                        result,
+                                        &odata->error);
 
   if(data.error != nullptr) {
-    DASMSG(connman_error, "connman.error.connect", "Connman error.");
-      DASMSG_SET(s1, DASMSG_ESCAPE(data.error->message), "Error message");
-      DASMSG_SEND();
     Log::Write("Connect error: %s", data.error->message);
   }
+  Log::Write("returned");
 
   return (data.error == nullptr)? ConnectWifiResult::CONNECT_SUCCESS:
     ConnectWifiResult::CONNECT_FAILURE;

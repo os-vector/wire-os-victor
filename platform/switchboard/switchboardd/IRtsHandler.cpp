@@ -11,7 +11,6 @@
  **/
 
 #include "switchboardd/IRtsHandler.h"
-#include "osState/osState.h"
 #include <cutils/properties.h>
 
 namespace Anki {
@@ -51,9 +50,7 @@ const std::string& IRtsHandler::GetBuildIdString() {
     (void)property_get("ro.build.id", buildNo, "");
 
     _buildIdString = std::string(buildNo);
-    if(Vector::OSState::getInstance()->IsAnkiDevRobot()) {
-      _buildIdString += "-ankidev";
-    }
+    _buildIdString += "-ankidev";
   }
 
   return _buildIdString;

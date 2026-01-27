@@ -41,7 +41,6 @@ PRIVATE
   util
   victorCrashReports
   anki-ble
-  osState
 )
 
 target_compile_options(switchboard
@@ -120,8 +119,6 @@ target_link_libraries(vic-rescue
   switchboard
   robot_interface
   robot_core
-  cti_common
-  cti_vision 
   ${PLATFORM_LIBS}
   sdk_clad_cpp
   robot_clad
@@ -140,7 +137,6 @@ target_link_libraries(vic-rescue
   libpcre.so.1
   libcutils.so.0
   util
-  victorCrashReports
   anki-ble
 )
 

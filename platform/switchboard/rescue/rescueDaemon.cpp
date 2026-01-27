@@ -23,9 +23,6 @@
 #include "anki-wifi/exec_command.h"
 #include "clad/robotInterface/messageEngineToRobot.h"
 #include "clad/externalInterface/messageEngineToGame.h"
-#include "core/lcd.h"
-#include "platform/victorCrashReports/victorCrashReporter.h"
-#include "rescue/miniFaceDisplay.h"
 
 #include "bleClient/bleClient.h"
 #include "switchboardd/rtsComms.h"
@@ -33,9 +30,7 @@
 #include "rescue/rescueClient.h"
 
 #include "util/fileUtils/fileUtils.h"
-#include "util/logging/DAS.h"
-#include "util/logging/logging.h"
-#include "util/logging/victorLogger.h"
+
 
 using namespace Anki::Switchboard;
 
@@ -73,15 +68,10 @@ void RescueDaemon::Start()
 void RescueDaemon::Stop()
 {
   // kill things and gracefully exit
-  Log::Write("Exiting vic-rescue...");
   ev_timer_stop(_loop, &_rescueTimer);
   ev_timer_stop(_loop, &_handleOtaTimer.timer);
   ev_unloop(_loop, EVUNLOOP_ALL);
 
-  Anki::Util::gLoggerProvider = nullptr;
-  Anki::Util::gEventProvider = nullptr;
-
-  Anki::Vector::UninstallCrashReporter();
 }
 
 // ============================================================================================
@@ -615,25 +605,8 @@ int main(int argc, char** argv)
   setAndroidLoggingTag("vic-rescue");
   Log::Write("Loading up vic-rescue");
 
-  Anki::Vector::InstallCrashReporter(LOG_PROCNAME);
-
-  Anki::Util::VictorLogger logger(LOG_PROCNAME);
-  Anki::Util::gLoggerProvider = &logger;
-  Anki::Util::gEventProvider = &logger;
-
-  DASMSG(rescue_hello, "vic-rescue.hello", "vic-rescue started");
-  DASMSG_SEND();
-
   // get main loop
   sLoop = ev_default_loop(0);
-
-  // init lcd
-  int rc = lcd_init();
-  if (rc != 0)
-  {
-    Log::Write("Failed to init LCD.");
-    return rc;
-  }
 
   // listen to sigint and sigterm
   ev_signal_init(&sSigInt, OnSignalCallback, SIGINT);

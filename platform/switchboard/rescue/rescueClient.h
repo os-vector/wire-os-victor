@@ -52,7 +52,6 @@ private:
   std::string _robotName;
   std::string _pin;
   uint16_t _faultCode;
-  bool _faultCodeRestart;
 };
 
 } // namespace Switchboard

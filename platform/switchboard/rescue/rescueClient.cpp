@@ -13,7 +13,6 @@
 **/
 
 #include "rescue/rescueClient.h"
-#include "rescue/miniFaceDisplay.h"
 
 #include "ev++.h"
 
@@ -89,23 +88,30 @@ void RescueClient::ShowPairingStatus(Anki::Vector::SwitchboardInterface::Connect
   using namespace Anki::Vector::SwitchboardInterface;
   switch(status) {
     case ConnectionStatus::NONE:
+      printf("none\n");
       break;
     case ConnectionStatus::START_PAIRING:
+      printf("start_pairing\n");
       break;
     case ConnectionStatus::SHOW_PRE_PIN:
-      Anki::Vector::DrawShowPinScreen(_robotName, "######");
+      printf("show_pre_pin\n");
       break;
     case ConnectionStatus::SHOW_PIN:
-      Anki::Vector::DrawShowPinScreen(_robotName, _pin);
+      printf("show_name:");
+      printf(_robotName.c_str());
+      printf("\n");
+      printf("show_pin:");
+      printf(_pin.c_str());
+      printf("\n");
       break;
     case ConnectionStatus::SETTING_WIFI:
     case ConnectionStatus::UPDATING_OS:
     case ConnectionStatus::UPDATING_OS_ERROR:
     case ConnectionStatus::WAITING_FOR_APP:
-      Anki::Vector::DrawShowPinScreen(_robotName, "RESCUE");
+      printf("waiting for app\n");
       break;
     case ConnectionStatus::END_PAIRING:
-      Anki::Vector::DrawFaultCode(_faultCode, _faultCodeRestart);
+      printf("pairing ended\n");
       break;
     default:
       break;

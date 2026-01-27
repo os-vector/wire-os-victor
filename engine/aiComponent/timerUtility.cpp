@@ -20,6 +20,46 @@
 #include <ctime>
 #include <ratio>
 #include <chrono>
+#include <unistd.h>
+
+namespace {
+  constexpr const char* kTimerPath = "/data/timer";
+
+  bool WriteTimerFile(int remaining_s) {
+    FILE* f = fopen(kTimerPath, "w");
+    if (!f) {
+      return false;
+    }
+    const time_t now = time(nullptr);
+    fprintf(f, "remaining_s=%d\nsaved_epoch_s=%ld\n", remaining_s, now);
+    fclose(f);
+    return true;
+  }
+
+  bool ReadTimerFile(int& outRemaining_s, time_t& outSavedEpoch) {
+    FILE* f = fopen(kTimerPath, "r");
+    if (!f) {
+      return false;
+    }
+
+    int r = -1;
+    long t = 0;
+    const int scanned = fscanf(f, "remaining_s=%d\nsaved_epoch_s=%ld\n", &r, &t);
+    fclose(f);
+
+    if (scanned != 2 || r <= 0) {
+      return false;
+    }
+    outRemaining_s = r;
+    outSavedEpoch = static_cast<time_t>(t);
+    return true;
+  }
+
+  void DeleteTimerFile() {
+    remove(kTimerPath);
+  }
+}
+
 
 namespace Anki {
 namespace Vector {
@@ -68,6 +108,66 @@ int TimerHandle::GetSystemTime_s()
   return static_cast<int>(time_s);
 }
 
+void TimerUtility::PersistTimerIfNeeded()
+{
+  if(!_activeTimer) return;
+
+  const int now_s = GetSystemTime_s();
+  if(now_s - _lastPersistTime_s < 10) return;
+
+  PersistTimerNow();
+  _lastPersistTime_s = now_s;
+}
+
+void TimerUtility::PersistTimerNow()
+{
+  if(!_activeTimer) return;
+  const int remaining = _activeTimer->GetTimeRemaining_s();
+  if(remaining > 0){
+    WriteTimerFile(remaining);
+  }
+}
+
+void TimerUtility::ClearPersistedTimerFile()
+{
+  DeleteTimerFile();
+}
+
+void TimerUtility::LoadPersistedTimerIfAllowed()
+{
+  int remaining_s = 0;
+  time_t savedEpoch = 0;
+
+  if(!ReadTimerFile(remaining_s, savedEpoch)){
+    DeleteTimerFile();
+    return;
+  }
+
+  const time_t now = time(nullptr);
+
+  tm local{};
+  localtime_r(&now, &local);
+
+  const bool isMaintenance = ( access( "/run/maintenance_reboot", F_OK ) != -1 );
+
+  if(!isMaintenance){
+    DeleteTimerFile();
+    return;
+  }
+
+  constexpr int kMin = 1;
+  constexpr int kMax = 24 * 60 * 60;
+  if(remaining_s < kMin || remaining_s > kMax){
+    DeleteTimerFile();
+    return;
+  }
+
+  _activeTimer = std::make_shared<TimerHandle>(remaining_s);
+  _restoredThisBoot = true;
+
+  PersistTimerNow();
+}
+
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // TimerUtility
@@ -78,7 +178,7 @@ TimerUtility::TimerUtility()
     PRINT_NAMED_WARNING("TimerUtility.Constructor.MultipleInstances","TimerUtility instance exists already");
   }
   sTimerUtility = this;
-
+  LoadPersistedTimerIfAllowed();
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -103,6 +203,7 @@ TimerUtility::SharedHandle TimerUtility::StartTimer(int timerLength_s)
 void TimerUtility::ClearTimer()
 {
   _activeTimer.reset();
+  ClearPersistedTimerFile();
 }
 
 
