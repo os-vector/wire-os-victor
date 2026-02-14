@@ -19,6 +19,7 @@
 #include "engine/components/localeComponent.h"
 #include "engine/components/robotStatsTracker.h"
 #include "engine/cozmoContext.h"
+#include "util/fileUtils/fileUtils.h"
 
 
 #define LOG_CHANNEL "BehaviorHowOldAreYou"
@@ -38,7 +39,6 @@ namespace {
   constexpr const char * kOneYearAndMonthKey = "BehaviorHowOldAreYou.OneYearAndMonth";
   constexpr const char * kSomeYearsKey = "BehaviorHowOldAreYou.SomeYears";
   constexpr const char * kSomeYearsAndMonthKey = "BehaviorHowOldAreYou.SomeYearsAndMonth";
-
 }
 
 namespace Anki {
@@ -132,52 +132,48 @@ void BehaviorHowOldAreYou::OnBehaviorActivated()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 std::chrono::hours BehaviorHowOldAreYou::GetRobotAge()
 {
-  // This used to use the onboarding completion time for date, when authing the dev bot to wp this gets overwritten so instead use when /data/persist was created
-  // check whether onboardingState file exists
-  // const auto* platform = GetBEI().GetRobotInfo().GetContext()->GetDataPlatform();
-  // _saveFolder = "/data/vic-gateway";
-  // saveFolder = Util::FileUtils::AddTrailingFileSeparator( _saveFolder );
-  // const kGatewayCertFilePath = kGatewayCertFolder + kGatewayCertFile;
-  // if( Util::FileUtils::DirectoryExists( kGatewayCertFolder ) && Util::FileUtils::FileExists( kGatewayCertFile ) ) {
+  // This used to use the onboarding completion time for date, 
+  // when authing the dev bot to wp this gets overwritten so instead we're using the
+  // date that /data/persist was created.
 
-    // file exists
-    // const std::string & file_s = Util::FileUtils::ReadFile(onboardingDataFilePath);
-    // gotta parse the file
-    // Json::Value file_j;
-    // Json::Reader reader;
-    // bool parsed = false;
-    // bool containsBoD = false;
-    // if (parsed) {
-    //   LOG_DEBUG("BehaviorHowOldAreYou.GetRobotAge.ParsedJson", "");
-    // } else {
-    //   LOG_WARNING("BehaviorHowOldAreYou.GetRobotAge.JsonParsingFailed",
-    //       "%s exists but failed to parse as Json", onboardingDataFilePath.c_str());
-    // }
-
+  if (Util::FileUtils::PathExists("/data/persist") || Util::FileUtils::PathExists("/data/vic-gateway")) {
     int64 onboardingTime_sse;
-    // if (parsed) {
-      // check whether born on date is written to file
-    //   containsBoD = file_j.isMember(BehaviorOnboardingCoordinator::kOnboardingTimeKey);
-    //   if (containsBoD) {
-        // if so, use that
-    //     onboardingTime_sse = file_j[BehaviorOnboardingCoordinator::kOnboardingTimeKey].asInt64();
-    //     LOG_INFO("BehaviorHowOldAreYou.GetRobotAge.ReadOnboardingTime",
-    //         "Read onboarding time (seconds since epoch): %lld", onboardingTime_sse);
-    //   } else {
-        // INFO because plenty of robots have onboarded before we introduce the change that writes this value to file.
-    //     LOG_INFO("BehaviorHowOldAreYou.GetRobotAge.NoOnboardingTime",
-    //         "%s not a member of onboarding file",
-    //         BehaviorOnboardingCoordinator::kOnboardingTimeKey.c_str());
-    //   }
-    // }
+    const int64 year2016_sse = 1451606400;
 
-    // if(!parsed || !containsBoD) {
-      // if not we couldn't get born on date from file, use modification time of the file
-      onboardingTime_sse = Util::FileUtils::GetFileLastModificationTime( "/data/persist" ); // seconds since the epoch
-      LOG_INFO("BehaviorHowOldAreYou.GetRobotAge.ModificationTimeFallback",
-          "Using file modification time of vic-gateway certificate (seconds since epoch): %lld",
+    onboardingTime_sse = Util::FileUtils::GetFileLastModificationTime( "/data/persist" ); // seconds since the epoch
+
+    if (onboardingTime_sse < year2016_sse) {
+      if (Util::FileUtils::PathExists("/data/vic-gateway")) {
+        LOG_WARNING("BehaviorHowOldAreYou.GetRobotAge.Pre2016Fallback",
+            "/data/persist modification time (%lld) is before 2016. Falling back to the vic-gateway cert (/data/vic-gateway)",
+            onboardingTime_sse);
+        
+        // Fall back to /data/vic-gateway
+        onboardingTime_sse = Util::FileUtils::GetFileLastModificationTime( "/data/vic-gateway" );
+        if (onboardingTime_sse < year2016_sse) {
+          LOG_WARNING("BehaviorHowOldAreYou.GetRobotAge.Pre2016Fallback",
+              "/data/vic-gateway modification time (%lld) is also before 2016. Attempting to fall back to onboardingState.json",
+              onboardingTime_sse);
+
+          if (Util::FileUtils::PathExists("/data/data/com.anki.victor/persistent/onboarding/onboardingState.json")) {
+            // Fall back to /data/data/com.anki.victor/persistent/onboarding/onboardingState.json
+            onboardingTime_sse = Util::FileUtils::GetFileLastModificationTime( "/data/data/com.anki.victor/persistent/onboarding/onboardingState.json" );
+            LOG_WARNING("BehaviorHowOldAreYou.GetRobotAge.OnboardingStateFallback",
+            "Using file modification time of onboardingState.json no matter what now (seconds since epoch): %lld",
+            onboardingTime_sse);
+          }
+
+        } else {
+          LOG_WARNING("BehaviorHowOldAreYou.GetRobotAge.VicGatewayFallback",
+          "Using file modification time of /data/vic-gateway (seconds since epoch): %lld",
           onboardingTime_sse);
-    // }
+        }
+      }
+    } else {
+      LOG_WARNING("BehaviorHowOldAreYou.GetRobotAge.ModificationTimeFallback",
+          "Using file modification time of /data/persist (seconds since epoch): %lld",
+          onboardingTime_sse);
+    }
 
     // convert seconds since the epoch to age in hours
     // make a duration, in seconds; make a system_clock timepoint from that duration--i.e., that many seconds since the epoch
@@ -186,20 +182,19 @@ std::chrono::hours BehaviorHowOldAreYou::GetRobotAge()
     const auto onboarding_dsc = std::chrono::system_clock::now() - onboarding_tp;
     // convert that duration to the units we want--hours, in this case. We're totally cool with losing precision.
     const std::chrono::hours robotAge_dh = std::chrono::duration_cast<std::chrono::hours>(onboarding_dsc);
-    LOG_INFO("BehaviorHowOldAreYou.GetRobotAge.ComputedRobotAgeFromOnboarding",
+    LOG_WARNING("BehaviorHowOldAreYou.GetRobotAge.ComputedRobotAgeFromOnboarding",
                 "robot age from onboarding time: %ld hours", robotAge_dh.count());
     return robotAge_dh;
 
-  // } else {
-
+  } else {
     // onboarding save file does not exist; fall back on RobotStatsTracker as done above
     // WARNING because it's really expected that this file exists by the time we get here
-    // LOG_WARNING("BehaviorHowOldAreYou.GetRobotAge.NoOnboardingFallback",
-    //     "no onboarding data found at %s. Falling back on RobotStatsTracker.");
-  //   const auto& rst = GetBehaviorComp<RobotStatsTracker>();
-  //   const float robotAge_h = rst.GetNumHoursAlive();
-  //   return std::chrono::hours{static_cast<int>(robotAge_h)};
-  // }
+    LOG_WARNING("BehaviorHowOldAreYou.GetRobotAge.NoOnboardingFallback",
+        "no onboarding data found at /data/persist or /data/vic-gateway. Falling back on RobotStatsTracker.");
+    const auto& rst = GetBehaviorComp<RobotStatsTracker>();
+    const float robotAge_h = rst.GetNumHoursAlive();
+    return std::chrono::hours{static_cast<int>(robotAge_h)};
+  }
 
 }
 
