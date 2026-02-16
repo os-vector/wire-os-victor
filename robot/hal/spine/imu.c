@@ -147,7 +147,7 @@
 #define FIFO_DATA_ACC_GYR         0xC2  // c2 for timestamp?
 
 // SPI DRIVER CONFIGURATION  
-static  uint32_t k_spi_mode = 0;
+static  uint32_t k_spi_mode = 3;
 static  uint32_t k_spi_bits = 8;
 static  uint32_t k_spi_speed = 15000000;
 
@@ -231,10 +231,10 @@ void imu_init()
   spi_write(CMD, SET_PMU_MODE | GYR_PMU | 1); // Power up gyroscope (normal mode)
   MicroWait(81000);   // Datasheet says wait 80ms
 
-#ifdef IMU_DEBUG
+//#ifdef IMU_DEBUG
   imu_debug("IMU status after power up: %02x %02x %02x\n", spi_read(CHIP_ID), spi_read(ERR_REG), spi_read(PMU_STATUS));
   //TODO: verify error register?
-#endif
+//#endif
 
   //Configure our sensors
   spi_write(ACC_RANGE, ACC_RANGE_2G);
@@ -252,6 +252,10 @@ void imu_init()
 
   uint8_t id = spi_read(CHIP_ID);
   imu_debug("IMU ID = %d\n", id);
+
+  printf("ACC_CONF: 0x%02x\n", spi_read(ACC_CONF));
+  printf("GYR_CONF: 0x%02x\n", spi_read(GYR_CONF));
+  printf("ACC_RANGE: 0x%02x\n", spi_read(ACC_RANGE));
 
 }
 
