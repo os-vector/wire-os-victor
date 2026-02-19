@@ -425,7 +425,7 @@ uint32_t OSState::GetTemperature_C() const
   if(kSendFakeCpuTemperature) {
     return kFakeCpuTemperature_degC;
   }
-  return _cpuTemp_C;
+  return _cpuTemp_C / 1000;
 }
 
 float OSState::GetUptimeAndIdleTime(float &idleTime_s) const

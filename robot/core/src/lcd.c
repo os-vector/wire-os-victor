@@ -175,7 +175,7 @@ bool lcd_use_midas_crop() {
 static int lcd_spi_init()
 {
   // SPI setup
-  static const uint8_t    MODE = 0;
+  static const uint8_t   MODE = 3;
   int lcd_fd = open("/dev/spidev1.0", O_RDWR);
   if (lcd_fd < 0) {
     error_return(app_DEVICE_OPEN_ERROR, "Can't open LCD SPI interface: %d\n", errno);
