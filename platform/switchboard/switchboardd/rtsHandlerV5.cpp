@@ -18,7 +18,7 @@
 #include "engine/clad/gateway/switchboard.h"
 #include "clad/externalInterface/messageGameToEngine.h"
 #include <sstream>
-#include <cutils/properties.h>
+#include <wutils/properties.h>
 
 namespace Anki {
 namespace Switchboard {

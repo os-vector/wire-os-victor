@@ -12,7 +12,7 @@
 
 #include "switchboardd/IRtsHandler.h"
 #include "osState/osState.h"
-#include <cutils/properties.h>
+#include <wutils/properties.h>
 
 namespace Anki {
 namespace Switchboard {

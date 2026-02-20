@@ -14,7 +14,7 @@
 #include <sodium.h>
 #include <sys/stat.h>
 #include "log.h"
-#include "cutils/properties.h"
+#include "wutils/properties.h"
 #include "switchboardd/pairingMessages.h"
 #include "util/fileUtils/fileUtils.h"
 

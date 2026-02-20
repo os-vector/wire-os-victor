@@ -11,8 +11,7 @@ set(PLATFORM_LIBS "")
 set(PLATFORM_COMPILE_DEFS "")
 if (VICOS)
     set(PLATFORM_LIBS
-        log
-        libcutils.so.0)
+        log)
 elseif (MACOSX)
     include(webots)
     set(PLATFORM_LIBS

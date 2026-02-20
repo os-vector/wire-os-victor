@@ -22,7 +22,7 @@
 #include "util/string/stringUtils.h"
 #include "util/time/universalTime.h"
 
-#include "cutils/properties.h"
+#include "wutils/properties.h"
 
 #include "anki/cozmo/shared/factory/emrHelper.h"
 
