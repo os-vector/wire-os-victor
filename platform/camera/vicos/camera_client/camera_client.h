@@ -114,7 +114,7 @@ struct anki_camera_handle {
 };
 
 // Initializes the camera & starts thread for communicating with daemon
-int camera_init(struct anki_camera_handle** camera);
+int camera_init(struct anki_camera_handle** camera, int is_xray);
 
 // Starts capturing frames
 // Captured frames are buffered internally and can be accessed by calling

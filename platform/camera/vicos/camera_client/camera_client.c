@@ -31,9 +31,22 @@
 #define VIDEO_DEVICE    "/dev/video0"
 #define SUBDEV_DEVICE   "/dev/v4l-subdev8"
 
-#define CAPTURE_WIDTH   1280
-#define CAPTURE_HEIGHT  720
-#define NUM_BUFFERS     4
+#define CAPTURE_WIDTH_1MP   1280
+#define CAPTURE_HEIGHT_1MP  720
+#define CAPTURE_WIDTH_2MP   1600
+#define CAPTURE_HEIGHT_2MP  1200
+#define NUM_BUFFERS         4
+
+#define EXPOSURE_LINES_PER_MS_1MP  22
+#define EXPOSURE_LINES_PER_MS_2MP  37
+
+#define EXPOSURE_MAX_LINES_1MP  1477
+#define EXPOSURE_MAX_LINES_2MP  1199
+
+#define GAIN_MIN_1MP   0
+#define GAIN_MAX_1MP   255
+#define GAIN_MIN_2MP   15
+#define GAIN_MAX_2MP   79
 
 struct v4l2_buffer_info {
     void*  start;
@@ -50,6 +63,8 @@ struct camera_context {
     int video_fd;
     int subdev_fd;
     anki_camera_status_t status;
+
+    int is_xray;
 
     struct v4l2_buffer_info buffers[NUM_BUFFERS];
     struct frame_wrapper wrappers[NUM_BUFFERS];
@@ -77,8 +92,8 @@ static int xioctl(int fd, unsigned long request, void* arg) {
 static int v4l2_set_format(struct camera_context* ctx) {
     struct v4l2_format fmt = {0};
     fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-    fmt.fmt.pix_mp.width = CAPTURE_WIDTH;
-    fmt.fmt.pix_mp.height = CAPTURE_HEIGHT;
+    fmt.fmt.pix_mp.width  = ctx->is_xray ? CAPTURE_WIDTH_2MP  : CAPTURE_WIDTH_1MP;
+    fmt.fmt.pix_mp.height = ctx->is_xray ? CAPTURE_HEIGHT_2MP : CAPTURE_HEIGHT_1MP;
     fmt.fmt.pix_mp.pixelformat = V4L2_PIX_FMT_SBGGR10P;
     fmt.fmt.pix_mp.field = V4L2_FIELD_NONE;
     fmt.fmt.pix_mp.num_planes = 1;
@@ -98,7 +113,8 @@ static int v4l2_set_format(struct camera_context* ctx) {
     ctx->bytes_per_row = fmt.fmt.pix_mp.plane_fmt[0].bytesperline;
     ctx->frame_size = fmt.fmt.pix_mp.plane_fmt[0].sizeimage;
 
-    ctx->pixel_format = ANKI_CAM_FORMAT_RAW;
+    ctx->pixel_format = ctx->is_xray ? ANKI_CAM_FORMAT_BAYER_MIPI_BGGR10_2MP
+                                     : ANKI_CAM_FORMAT_BAYER_MIPI_BGGR10;
 
     return 0;
 }
@@ -217,12 +233,13 @@ static void v4l2_cleanup_buffers(struct camera_context* ctx)
     ctx->num_buffers = 0;
 }
 
-int camera_init(struct anki_camera_handle** camera)
+int camera_init(struct anki_camera_handle** camera, int is_xray)
 {
     memset(&g_ctx, 0, sizeof(g_ctx));
     g_ctx.video_fd = -1;
     g_ctx.subdev_fd = -1;
     g_ctx.frame_id = 1;
+    g_ctx.is_xray = is_xray;
 
     g_ctx.video_fd = open(VIDEO_DEVICE, O_RDWR);
     if (g_ctx.video_fd < 0) {
@@ -434,26 +451,34 @@ int camera_set_exposure(struct anki_camera_handle* camera, uint16_t exposure_ms,
         return -1;
     }
 
-    // our range: 1-66 ms
-    // GC1066 register range: 1-1477 lines
     struct v4l2_control ctrl = {0};
     ctrl.id = V4L2_CID_EXPOSURE;
 
-    ctrl.value = exposure_ms * 22;
-    if (ctrl.value > 1477) ctrl.value = 1477;
-    if (ctrl.value < 1) ctrl.value = 1;
+    if (g_ctx.is_xray) {
+        ctrl.value = (int)exposure_ms * EXPOSURE_LINES_PER_MS_2MP;
+        if (ctrl.value > EXPOSURE_MAX_LINES_2MP) ctrl.value = EXPOSURE_MAX_LINES_2MP;
+        if (ctrl.value < 1) ctrl.value = 1;
+    } else {
+        ctrl.value = (int)exposure_ms * EXPOSURE_LINES_PER_MS_1MP;
+        if (ctrl.value > EXPOSURE_MAX_LINES_1MP) ctrl.value = EXPOSURE_MAX_LINES_1MP;
+        if (ctrl.value < 1) ctrl.value = 1;
+    }
 
     if (xioctl(g_ctx.subdev_fd, VIDIOC_S_CTRL, &ctrl) < 0) {
         fprintf(stderr, "camera: Failed to set exposure: %s\n", strerror(errno));
     }
 
-    // our range: 0.25 - 3.8
-    // v4l2 range: 0-255
     ctrl.id = V4L2_CID_GAIN;
-    ctrl.value = (int)(gain * 72.0f);
 
-    if (ctrl.value > 255) ctrl.value = 255;
-    if (ctrl.value < 0) ctrl.value = 0;
+    if (g_ctx.is_xray) {
+        ctrl.value = (int)(gain * 11.15f + 3.85f);
+        if (ctrl.value > GAIN_MAX_2MP) ctrl.value = GAIN_MAX_2MP;
+        if (ctrl.value < GAIN_MIN_2MP) ctrl.value = GAIN_MIN_2MP;
+    } else {
+        ctrl.value = (int)(gain * 72.0f);
+        if (ctrl.value > GAIN_MAX_1MP) ctrl.value = GAIN_MAX_1MP;
+        if (ctrl.value < GAIN_MIN_1MP) ctrl.value = GAIN_MIN_1MP;
+    }
 
     if (xioctl(g_ctx.subdev_fd, VIDIOC_S_CTRL, &ctrl) < 0) {
         fprintf(stderr, "camera: Failed to set gain: %s\n", strerror(errno));
@@ -501,14 +526,19 @@ int camera_set_capture_format(struct anki_camera_handle* camera, anki_camera_pix
 {
     (void)camera;
 
-    if (format != ANKI_CAM_FORMAT_RAW &&
-        format != ANKI_CAM_FORMAT_BAYER_MIPI_BGGR10) {
-        fprintf(stderr, "camera: Only RAW format currently supported\n");
-        return -1;
+    switch (format) {
+        case ANKI_CAM_FORMAT_BAYER_MIPI_BGGR10:
+        case ANKI_CAM_FORMAT_RGB888:
+        case ANKI_CAM_FORMAT_YUV:
+        case ANKI_CAM_FORMAT_BAYER_MIPI_BGGR10_2MP:
+        case ANKI_CAM_FORMAT_RGB888_2MP:
+        case ANKI_CAM_FORMAT_YUV_2MP:
+            g_ctx.pixel_format = format;
+            return 0;
+        default:
+            fprintf(stderr, "camera: unknown format %d\n", (int)format);
+            return -1;
     }
-
-    g_ctx.pixel_format = format;
-    return 0;
 }
 
 int camera_set_capture_snapshot(struct anki_camera_handle* camera, uint8_t start)

@@ -144,7 +144,7 @@ namespace Anki {
 
       _powerState = CameraPowerState::WaitingToInit;
       
-      int rc = camera_init(&_camera);
+      int rc = camera_init(&_camera, (int)IsXray());
       if (rc != 0) {
         LOG_ERROR("CameraService.InitCamera.CameraInitFailed", "camera_init error %d", rc);
         _powerState = CameraPowerState::Off;
@@ -291,7 +291,7 @@ namespace Anki {
           LOG_INFO("CameraService.Update.Offline",
                    "Camera is offline, re-initing");
 
-          rc = camera_init(&_camera);
+          rc = camera_init(&_camera, (int)IsXray());
           status = camera_status(_camera);
         }
 
