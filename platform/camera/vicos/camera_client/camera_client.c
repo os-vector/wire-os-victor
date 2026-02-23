@@ -428,9 +428,9 @@ int camera_frame_acquire(struct anki_camera_handle* camera, uint64_t frame_times
         return -1;
     }
 
-    if (frame->frame_id % 30 == 0) {
-        fprintf(stderr, "camera_frame_acquire: frame %u acquired successfully\n", frame->frame_id);
-    }
+    // if (frame->frame_id % 30 == 0) {
+    //     fprintf(stderr, "camera_frame_acquire: frame %u acquired successfully\n", frame->frame_id);
+    // }
 
     *out_frame = frame;
 
@@ -510,13 +510,14 @@ int camera_set_awb(struct anki_camera_handle* camera, float r_gain, float g_gain
     ctrl.id = V4L2_CID_RED_BALANCE;
     ctrl.value = r_val;
     if (xioctl(g_ctx.subdev_fd, VIDIOC_S_CTRL, &ctrl) < 0) {
-        fprintf(stderr, "camera: Failed to set R gain: %s\n", strerror(errno));
+        // 2.0 doesn't implement this and frankly i cannot be bothered
+        //fprintf(stderr, "camera: Failed to set R gain: %s\n", strerror(errno));
     }
 
     ctrl.id = V4L2_CID_BLUE_BALANCE;
     ctrl.value = b_val;
     if (xioctl(g_ctx.subdev_fd, VIDIOC_S_CTRL, &ctrl) < 0) {
-        fprintf(stderr, "camera: Failed to set B gain: %s\n", strerror(errno));
+        //fprintf(stderr, "camera: Failed to set B gain: %s\n", strerror(errno));
     }
 
     return 0;
