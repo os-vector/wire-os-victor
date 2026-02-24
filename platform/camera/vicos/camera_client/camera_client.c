@@ -25,6 +25,7 @@
 #include <sys/mman.h>
 #include <sys/select.h>
 #include <linux/videodev2.h>
+#include <pthread.h>
 
 #include "camera_client.h"
 
@@ -43,10 +44,12 @@
 #define EXPOSURE_MAX_LINES_1MP  1477
 #define EXPOSURE_MAX_LINES_2MP  1199
 
-#define GAIN_MIN_1MP   0
+#define GAIN_MIN_1MP   64
 #define GAIN_MAX_1MP   255
 #define GAIN_MIN_2MP   15
 #define GAIN_MAX_2MP   79
+
+#define NUM_RING_FRAMES 6
 
 struct v4l2_buffer_info {
     void*  start;
@@ -77,6 +80,18 @@ struct camera_context {
     uint32_t bytes_per_row;
     uint32_t frame_size;
     anki_camera_pixel_format_t pixel_format;
+
+    pthread_t       capture_thread;
+    pthread_mutex_t frame_mutex;
+    pthread_cond_t  frame_cond;
+    int             stop_pipe[2];
+
+    anki_camera_frame_t* ring_frames[NUM_RING_FRAMES];
+    anki_camera_frame_t* output_frame;
+    size_t               frame_alloc_size;
+
+    uint32_t ring_write_slot;
+    uint32_t last_served_frame_id;
 };
 
 static struct camera_context g_ctx;
@@ -115,7 +130,7 @@ static int v4l2_set_format(struct camera_context* ctx) {
 
     ctx->pixel_format = ctx->is_xray ? ANKI_CAM_FORMAT_BAYER_MIPI_BGGR10_2MP
                                      : ANKI_CAM_FORMAT_BAYER_MIPI_BGGR10;
-
+                                     
     return 0;
 }
 
@@ -233,13 +248,91 @@ static void v4l2_cleanup_buffers(struct camera_context* ctx)
     ctx->num_buffers = 0;
 }
 
+static void* capture_thread_func(void* arg)
+{
+    (void)arg;
+
+    while (1) {
+        fd_set fds;
+        FD_ZERO(&fds);
+        FD_SET(g_ctx.video_fd, &fds);
+        FD_SET(g_ctx.stop_pipe[0], &fds);
+        int nfds = (g_ctx.video_fd > g_ctx.stop_pipe[0]
+                    ? g_ctx.video_fd : g_ctx.stop_pipe[0]) + 1;
+
+        struct timeval tv = { .tv_sec = 0, .tv_usec = 100000 };
+        int r = select(nfds, &fds, NULL, NULL, &tv);
+        if (r < 0) {
+            if (errno == EINTR) continue;
+            fprintf(stderr, "capture thread: select failed: %s\n", strerror(errno));
+            break;
+        }
+        if (r == 0) continue;
+
+        if (FD_ISSET(g_ctx.stop_pipe[0], &fds)) break;
+        if (!FD_ISSET(g_ctx.video_fd, &fds)) continue;
+
+        struct v4l2_plane planes[1] = {{0}};
+        struct v4l2_buffer buf = {0};
+        buf.type   = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+        buf.memory = V4L2_MEMORY_MMAP;
+        buf.m.planes = planes;
+        buf.length = 1;
+
+        if (xioctl(g_ctx.video_fd, VIDIOC_DQBUF, &buf) < 0) {
+            fprintf(stderr, "capture thread: VIDIOC_DQBUF failed: %s\n", strerror(errno));
+            continue;
+        }
+
+        uint64_t timestamp_ns = (uint64_t)buf.timestamp.tv_sec  * 1000000000ULL
+                              + (uint64_t)buf.timestamp.tv_usec * 1000ULL;
+
+        pthread_mutex_lock(&g_ctx.frame_mutex);
+
+        uint32_t slot = g_ctx.ring_write_slot % NUM_RING_FRAMES;
+        g_ctx.ring_write_slot++;
+        anki_camera_frame_t* f = g_ctx.ring_frames[slot];
+
+        f->timestamp       = timestamp_ns;
+        f->frame_id        = g_ctx.frame_id++;
+        f->width           = g_ctx.width;
+        f->height          = g_ctx.height;
+        f->bytes_per_row   = g_ctx.bytes_per_row;
+        f->bits_per_pixel  = 10;
+        f->format          = g_ctx.pixel_format;
+        memcpy(f->data, g_ctx.buffers[buf.index].start, g_ctx.frame_size);
+
+        if (f->frame_id == 1 || f->frame_id % 150 == 0) {
+            const uint8_t* d = (const uint8_t*)g_ctx.buffers[buf.index].start;
+            fprintf(stderr, "capture: frame %u slot %u ts=%llu data[0..3]=%02x %02x %02x %02x\n",
+                    f->frame_id, slot, (unsigned long long)timestamp_ns,
+                    d[0], d[1], d[2], d[3]);
+        }
+
+        pthread_cond_signal(&g_ctx.frame_cond);
+        pthread_mutex_unlock(&g_ctx.frame_mutex);
+
+        buf.m.planes = planes;
+        if (xioctl(g_ctx.video_fd, VIDIOC_QBUF, &buf) < 0) {
+            fprintf(stderr, "capture thread: VIDIOC_QBUF failed: %s\n", strerror(errno));
+        }
+    }
+
+    return NULL;
+}
+
 int camera_init(struct anki_camera_handle** camera, int is_xray)
 {
     memset(&g_ctx, 0, sizeof(g_ctx));
-    g_ctx.video_fd = -1;
-    g_ctx.subdev_fd = -1;
-    g_ctx.frame_id = 1;
-    g_ctx.is_xray = is_xray;
+    g_ctx.video_fd      = -1;
+    g_ctx.subdev_fd     = -1;
+    g_ctx.stop_pipe[0]  = -1;
+    g_ctx.stop_pipe[1]  = -1;
+    g_ctx.frame_id      = 1;
+    g_ctx.is_xray       = is_xray;
+
+    pthread_mutex_init(&g_ctx.frame_mutex, NULL);
+    pthread_cond_init(&g_ctx.frame_cond, NULL);
 
     g_ctx.video_fd = open(VIDEO_DEVICE, O_RDWR);
     if (g_ctx.video_fd < 0) {
@@ -251,17 +344,13 @@ int camera_init(struct anki_camera_handle** camera, int is_xray)
 
     if (v4l2_set_format(&g_ctx) < 0) {
         close(g_ctx.video_fd);
-        if (g_ctx.subdev_fd >= 0) {
-            close(g_ctx.subdev_fd);
-        }
+        if (g_ctx.subdev_fd >= 0) close(g_ctx.subdev_fd);
         return -1;
     }
 
     if (v4l2_request_buffers(&g_ctx) < 0) {
         close(g_ctx.video_fd);
-        if (g_ctx.subdev_fd >= 0) {
-            close(g_ctx.subdev_fd);
-        }
+        if (g_ctx.subdev_fd >= 0) close(g_ctx.subdev_fd);
         return -1;
     }
 
@@ -272,6 +361,7 @@ int camera_init(struct anki_camera_handle** camera, int is_xray)
 }
 
 int camera_start(struct anki_camera_handle* camera) {
+    usleep(200000);
     (void)camera;
 
     if (g_ctx.status == ANKI_CAMERA_STATUS_RUNNING) {
@@ -292,9 +382,77 @@ int camera_start(struct anki_camera_handle* camera) {
         return -1;
     }
 
+    g_ctx.frame_alloc_size = sizeof(anki_camera_frame_t) + g_ctx.frame_size;
+    for (int i = 0; i < NUM_RING_FRAMES; i++) {
+        g_ctx.ring_frames[i] = malloc(g_ctx.frame_alloc_size);
+        if (!g_ctx.ring_frames[i]) {
+            fprintf(stderr, "camera_start: ring frame allocation failed at slot %d\n", i);
+            for (int j = 0; j < i; j++) { free(g_ctx.ring_frames[j]); g_ctx.ring_frames[j] = NULL; }
+            v4l2_stop_streaming(&g_ctx);
+            g_ctx.status = ANKI_CAMERA_STATUS_IDLE;
+            return -1;
+        }
+        memset(g_ctx.ring_frames[i], 0, g_ctx.frame_alloc_size);
+    }
+    g_ctx.output_frame = malloc(g_ctx.frame_alloc_size);
+    if (!g_ctx.output_frame) {
+        fprintf(stderr, "camera_start: output frame allocation failed\n");
+        for (int i = 0; i < NUM_RING_FRAMES; i++) { free(g_ctx.ring_frames[i]); g_ctx.ring_frames[i] = NULL; }
+        v4l2_stop_streaming(&g_ctx);
+        g_ctx.status = ANKI_CAMERA_STATUS_IDLE;
+        return -1;
+    }
+    memset(g_ctx.output_frame, 0, g_ctx.frame_alloc_size);
+    g_ctx.ring_write_slot      = 0;
+    g_ctx.last_served_frame_id = 0;
+
+    if (pipe(g_ctx.stop_pipe) < 0) {
+        fprintf(stderr, "camera_start: pipe failed: %s\n", strerror(errno));
+        for (int i = 0; i < NUM_RING_FRAMES; i++) { free(g_ctx.ring_frames[i]); g_ctx.ring_frames[i] = NULL; }
+        free(g_ctx.output_frame);
+        g_ctx.output_frame = NULL;
+        v4l2_stop_streaming(&g_ctx);
+        g_ctx.status = ANKI_CAMERA_STATUS_IDLE;
+        return -1;
+    }
+
+    if (pthread_create(&g_ctx.capture_thread, NULL, capture_thread_func, NULL) != 0) {
+        fprintf(stderr, "camera_start: pthread_create failed\n");
+        close(g_ctx.stop_pipe[0]);
+        close(g_ctx.stop_pipe[1]);
+        g_ctx.stop_pipe[0] = g_ctx.stop_pipe[1] = -1;
+        for (int i = 0; i < NUM_RING_FRAMES; i++) { free(g_ctx.ring_frames[i]); g_ctx.ring_frames[i] = NULL; }
+        free(g_ctx.output_frame);
+        g_ctx.output_frame = NULL;
+        v4l2_stop_streaming(&g_ctx);
+        g_ctx.status = ANKI_CAMERA_STATUS_IDLE;
+        return -1;
+    }
+
     g_ctx.status = ANKI_CAMERA_STATUS_RUNNING;
-    fprintf(stderr, "camera_start: streaming started\n");
+    fprintf(stderr, "camera_start: streaming started with background capture thread\n");
     return 0;
+}
+
+static void stop_capture_thread(void)
+{
+    if (g_ctx.stop_pipe[1] >= 0) {
+        char byte = 1;
+        if (write(g_ctx.stop_pipe[1], &byte, 1) != 1) {
+            fprintf(stderr, "stop_capture_thread: failed to write stop signal\n");
+        }
+        pthread_join(g_ctx.capture_thread, NULL);
+        close(g_ctx.stop_pipe[0]);
+        close(g_ctx.stop_pipe[1]);
+        g_ctx.stop_pipe[0] = g_ctx.stop_pipe[1] = -1;
+    }
+
+    for (int i = 0; i < NUM_RING_FRAMES; i++) {
+        free(g_ctx.ring_frames[i]);
+        g_ctx.ring_frames[i] = NULL;
+    }
+    free(g_ctx.output_frame);
+    g_ctx.output_frame = NULL;
 }
 
 int camera_stop(struct anki_camera_handle* camera)
@@ -307,10 +465,22 @@ int camera_stop(struct anki_camera_handle* camera)
 
     fprintf(stderr, "camera_stop: stopping camera (frame_id=%u)\n", g_ctx.frame_id);
 
-    // keeping the buffers allocated, otherwise cma issues
-    v4l2_stop_streaming(&g_ctx);
+    stop_capture_thread();
 
-    g_ctx.status = ANKI_CAMERA_STATUS_IDLE;
+    v4l2_stop_streaming(&g_ctx);
+    v4l2_cleanup_buffers(&g_ctx);
+
+    if (g_ctx.video_fd >= 0) {
+        close(g_ctx.video_fd);
+        g_ctx.video_fd = -1;
+    }
+
+    if (g_ctx.subdev_fd >= 0) {
+        close(g_ctx.subdev_fd);
+        g_ctx.subdev_fd = -1;
+    }
+
+    g_ctx.status = ANKI_CAMERA_STATUS_OFFLINE;
 
     return 0;
 }
@@ -363,77 +533,63 @@ int camera_destroy(struct anki_camera_handle* camera)  {
         g_ctx.subdev_fd = -1;
     }
 
+    pthread_mutex_destroy(&g_ctx.frame_mutex);
+    pthread_cond_destroy(&g_ctx.frame_cond);
+
     return 1;
 }
 
 int camera_frame_acquire(struct anki_camera_handle* camera, uint64_t frame_timestamp, anki_camera_frame_t** out_frame) {
     (void)camera;
-    (void)frame_timestamp;
 
     if (g_ctx.status != ANKI_CAMERA_STATUS_RUNNING) {
-        fprintf(stderr, "camera_frame_acquire: camera not running (status=%d)\n", g_ctx.status);
         return -1;
     }
 
-    fd_set fds;
-    FD_ZERO(&fds);
-    FD_SET(g_ctx.video_fd, &fds);
-    struct timeval tv = { .tv_sec = 1, .tv_usec = 0 };
+    pthread_mutex_lock(&g_ctx.frame_mutex);
 
-    int r = select(g_ctx.video_fd + 1, &fds, NULL, NULL, &tv);
-    if (r < 0) {
-        if (errno == EINTR) {
-            fprintf(stderr, "camera_frame_acquire: select interrupted\n");
-            return -1;
+    anki_camera_frame_t* best = NULL;
+    uint64_t best_ts = 0;
+
+    for (int i = 0; i < NUM_RING_FRAMES; i++) {
+        anki_camera_frame_t* f = g_ctx.ring_frames[i];
+        if (f->timestamp == 0) continue;
+        if (f->frame_id == g_ctx.last_served_frame_id) continue;
+        if (frame_timestamp == 0 || f->timestamp <= frame_timestamp) {
+            if (f->timestamp > best_ts) {
+                best_ts = f->timestamp;
+                best = f;
+            }
         }
-        fprintf(stderr, "camera: select failed: %s\n", strerror(errno));
-        return -1;
-    }
-    if (r == 0) {
-        fprintf(stderr, "camera_frame_acquire timeout :(\n");
-        return -1;
     }
 
-    struct v4l2_plane planes[1] = {{0}};
-    struct v4l2_buffer buf = {0};
-    buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-    buf.memory = V4L2_MEMORY_MMAP;
-    buf.m.planes = planes;
-    buf.length = 1;
-
-    if (xioctl(g_ctx.video_fd, VIDIOC_DQBUF, &buf) < 0) {
-        fprintf(stderr, "camera: VIDIOC_DQBUF failed: %s\n", strerror(errno));
+    if (best == NULL) {
+        pthread_mutex_unlock(&g_ctx.frame_mutex);
         return -1;
     }
 
-    uint64_t timestamp_ns = (uint64_t)buf.timestamp.tv_sec * 1000000000ULL +
-                            (uint64_t)buf.timestamp.tv_usec * 1000ULL;
+    memcpy(g_ctx.output_frame, best, g_ctx.frame_alloc_size);
+    g_ctx.last_served_frame_id = best->frame_id;
 
-    anki_camera_frame_t* frame = g_ctx.wrappers[buf.index].frame;
-
-    frame->timestamp = timestamp_ns;
-    frame->frame_id = g_ctx.frame_id++;
-    frame->width = g_ctx.width;
-    frame->height = g_ctx.height;
-    frame->bytes_per_row = g_ctx.bytes_per_row;
-    frame->bits_per_pixel = 10;  // SBGGR10P
-    frame->format = g_ctx.pixel_format;
-
-    void* v4l2_pixels = g_ctx.buffers[buf.index].start;
-    memcpy(frame->data, v4l2_pixels, g_ctx.frame_size);
-
-    buf.m.planes = planes;
-    if (xioctl(g_ctx.video_fd, VIDIOC_QBUF, &buf) < 0) {
-        fprintf(stderr, "camera: VIDIOC_QBUF failed: %s\n", strerror(errno));
-        return -1;
+    static int first_serve_logged = 0;
+    if (!first_serve_logged) {
+        first_serve_logged = 1;
+        const uint8_t* d = g_ctx.output_frame->data;
+        fprintf(stderr, "camera_frame_acquire: first serve id=%u ts=%llu desired_ts=%llu "
+                "fmt=%u %ux%u bpr=%u alloc=%zu "
+                "data[0..9]=%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+                g_ctx.output_frame->frame_id,
+                (unsigned long long)g_ctx.output_frame->timestamp,
+                (unsigned long long)frame_timestamp,
+                g_ctx.output_frame->format, g_ctx.output_frame->width,
+                g_ctx.output_frame->height, g_ctx.output_frame->bytes_per_row,
+                g_ctx.frame_alloc_size,
+                d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8], d[9]);
     }
 
-    // if (frame->frame_id % 30 == 0) {
-    //     fprintf(stderr, "camera_frame_acquire: frame %u acquired successfully\n", frame->frame_id);
-    // }
+    pthread_mutex_unlock(&g_ctx.frame_mutex);
 
-    *out_frame = frame;
-
+    *out_frame = g_ctx.output_frame;
     return 0;
 }
 
@@ -526,6 +682,8 @@ int camera_set_awb(struct anki_camera_handle* camera, float r_gain, float g_gain
 int camera_set_capture_format(struct anki_camera_handle* camera, anki_camera_pixel_format_t format)
 {
     (void)camera;
+
+    fprintf(stderr, "camera_set_capture_format: format=%d (0=BAYER,1=RGB,2=YUV,3=BAYER2MP,4=RGB2MP,5=YUV2MP)\n", (int)format);
 
     switch (format) {
         case ANKI_CAM_FORMAT_BAYER_MIPI_BGGR10:

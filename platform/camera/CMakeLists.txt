@@ -23,6 +23,7 @@ target_include_directories(camera_client
 target_link_libraries(camera_client
   PRIVATE
   gpio
+  pthread
 )
 
 target_compile_definitions(camera_client
