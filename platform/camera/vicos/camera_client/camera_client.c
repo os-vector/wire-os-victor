@@ -96,6 +96,9 @@ struct camera_context {
 
 static struct camera_context g_ctx;
 
+#define CAMERA_VFE_REOPEN_DELAY_MS 2000
+static struct timespec g_last_camera_close_time = {0, 0};
+
 static int xioctl(int fd, unsigned long request, void* arg) {
     int r;
     do {
@@ -323,6 +326,18 @@ static void* capture_thread_func(void* arg)
 
 int camera_init(struct anki_camera_handle** camera, int is_xray)
 {
+    if (g_last_camera_close_time.tv_sec != 0) {
+        struct timespec now;
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        long elapsed_ms = (now.tv_sec  - g_last_camera_close_time.tv_sec)  * 1000L
+                        + (now.tv_nsec - g_last_camera_close_time.tv_nsec) / 1000000L;
+        if (elapsed_ms < CAMERA_VFE_REOPEN_DELAY_MS) {
+            fprintf(stderr, "camera_init: waiting for VFE cooldown (%ld/%d ms elapsed)\n",
+                    elapsed_ms, CAMERA_VFE_REOPEN_DELAY_MS);
+            return -1;
+        }
+    }
+
     memset(&g_ctx, 0, sizeof(g_ctx));
     g_ctx.video_fd      = -1;
     g_ctx.subdev_fd     = -1;
@@ -357,6 +372,48 @@ int camera_init(struct anki_camera_handle** camera, int is_xray)
     g_ctx.status = ANKI_CAMERA_STATUS_IDLE;
 
     *camera = (struct anki_camera_handle*)&g_ctx;
+    return 0;
+}
+
+static void stop_capture_thread_join(void)
+{
+    if (g_ctx.stop_pipe[1] >= 0) {
+        char byte = 1;
+        if (write(g_ctx.stop_pipe[1], &byte, 1) != 1) {
+            fprintf(stderr, "stop_capture_thread: failed to write stop signal\n");
+        }
+        pthread_join(g_ctx.capture_thread, NULL);
+        close(g_ctx.stop_pipe[0]);
+        close(g_ctx.stop_pipe[1]);
+        g_ctx.stop_pipe[0] = g_ctx.stop_pipe[1] = -1;
+    }
+}
+
+static void stop_capture_thread(void)
+{
+    stop_capture_thread_join();
+
+    for (int i = 0; i < NUM_RING_FRAMES; i++) {
+        free(g_ctx.ring_frames[i]);
+        g_ctx.ring_frames[i] = NULL;
+    }
+    free(g_ctx.output_frame);
+    g_ctx.output_frame = NULL;
+}
+
+static int start_capture_thread_only(void)
+{
+    if (pipe(g_ctx.stop_pipe) < 0) {
+        fprintf(stderr, "start_capture_thread: pipe failed: %s\n", strerror(errno));
+        return -1;
+    }
+    if (pthread_create(&g_ctx.capture_thread, NULL, capture_thread_func, NULL) != 0) {
+        fprintf(stderr, "start_capture_thread: pthread_create failed\n");
+        close(g_ctx.stop_pipe[0]);
+        close(g_ctx.stop_pipe[1]);
+        g_ctx.stop_pipe[0] = g_ctx.stop_pipe[1] = -1;
+        return -1;
+    }
     return 0;
 }
 
@@ -406,21 +463,7 @@ int camera_start(struct anki_camera_handle* camera) {
     g_ctx.ring_write_slot      = 0;
     g_ctx.last_served_frame_id = 0;
 
-    if (pipe(g_ctx.stop_pipe) < 0) {
-        fprintf(stderr, "camera_start: pipe failed: %s\n", strerror(errno));
-        for (int i = 0; i < NUM_RING_FRAMES; i++) { free(g_ctx.ring_frames[i]); g_ctx.ring_frames[i] = NULL; }
-        free(g_ctx.output_frame);
-        g_ctx.output_frame = NULL;
-        v4l2_stop_streaming(&g_ctx);
-        g_ctx.status = ANKI_CAMERA_STATUS_IDLE;
-        return -1;
-    }
-
-    if (pthread_create(&g_ctx.capture_thread, NULL, capture_thread_func, NULL) != 0) {
-        fprintf(stderr, "camera_start: pthread_create failed\n");
-        close(g_ctx.stop_pipe[0]);
-        close(g_ctx.stop_pipe[1]);
-        g_ctx.stop_pipe[0] = g_ctx.stop_pipe[1] = -1;
+    if (start_capture_thread_only() != 0) {
         for (int i = 0; i < NUM_RING_FRAMES; i++) { free(g_ctx.ring_frames[i]); g_ctx.ring_frames[i] = NULL; }
         free(g_ctx.output_frame);
         g_ctx.output_frame = NULL;
@@ -434,32 +477,11 @@ int camera_start(struct anki_camera_handle* camera) {
     return 0;
 }
 
-static void stop_capture_thread(void)
-{
-    if (g_ctx.stop_pipe[1] >= 0) {
-        char byte = 1;
-        if (write(g_ctx.stop_pipe[1], &byte, 1) != 1) {
-            fprintf(stderr, "stop_capture_thread: failed to write stop signal\n");
-        }
-        pthread_join(g_ctx.capture_thread, NULL);
-        close(g_ctx.stop_pipe[0]);
-        close(g_ctx.stop_pipe[1]);
-        g_ctx.stop_pipe[0] = g_ctx.stop_pipe[1] = -1;
-    }
-
-    for (int i = 0; i < NUM_RING_FRAMES; i++) {
-        free(g_ctx.ring_frames[i]);
-        g_ctx.ring_frames[i] = NULL;
-    }
-    free(g_ctx.output_frame);
-    g_ctx.output_frame = NULL;
-}
-
 int camera_stop(struct anki_camera_handle* camera)
 {
     (void)camera;
 
-    if (g_ctx.status != ANKI_CAMERA_STATUS_RUNNING) {
+    if (g_ctx.status == ANKI_CAMERA_STATUS_OFFLINE) {
         return 0;
     }
 
@@ -473,6 +495,7 @@ int camera_stop(struct anki_camera_handle* camera)
     if (g_ctx.video_fd >= 0) {
         close(g_ctx.video_fd);
         g_ctx.video_fd = -1;
+        clock_gettime(CLOCK_MONOTONIC, &g_last_camera_close_time);
     }
 
     if (g_ctx.subdev_fd >= 0) {
@@ -491,6 +514,7 @@ void camera_pause(struct anki_camera_handle* camera, int pause)
 
     if (pause) {
         if (g_ctx.status == ANKI_CAMERA_STATUS_RUNNING) {
+            stop_capture_thread_join();
             v4l2_stop_streaming(&g_ctx);
             g_ctx.status = ANKI_CAMERA_STATUS_IDLE;
         }
@@ -498,6 +522,10 @@ void camera_pause(struct anki_camera_handle* camera, int pause)
         if (g_ctx.status == ANKI_CAMERA_STATUS_IDLE && g_ctx.num_buffers > 0) {
             v4l2_queue_all_buffers(&g_ctx);
             v4l2_start_streaming(&g_ctx);
+            if (start_capture_thread_only() != 0) {
+                v4l2_stop_streaming(&g_ctx);
+                return;
+            }
             g_ctx.status = ANKI_CAMERA_STATUS_RUNNING;
         }
     }
