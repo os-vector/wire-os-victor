@@ -37,8 +37,8 @@ namespace Vector {
 
 enum class DesiredCPUFrequency : uint32_t {
   Automatic = 0,
-  Manual200MHz = 200000,
-  Manual400Mhz = 400000,
+  Manual200MHz = 199999,
+  Manual400Mhz = 399999,
   Manual533Mhz = 533333,
 };
 
