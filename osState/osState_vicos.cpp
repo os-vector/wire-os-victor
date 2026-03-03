@@ -118,7 +118,7 @@ namespace {
   constexpr const char* kRobotVersionFile = "/anki/etc/version";
   constexpr const char* kMaintenanceRebootFile = "/run/after_maintenance_reboot";
 
-  const char* kAutomaticGovernor = "interactive";
+  const char* kAutomaticGovernor = "ondemand";
   const char* kManualGovernor = "userspace";
 
   const char* const kWifiInterfaceName = "wlan0";
