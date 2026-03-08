@@ -27,10 +27,12 @@ int main(int argc, char** argv)
 	const char* overrideLoad="*=RAM";												
 	int err=0;
 /* License handling: It is possible to link staticaly the licence data */
-#ifdef MY_LICENSE_H
-# include MY_LICENSE_H  /* INCLUDE YOUR LICENSE FILE It defines babLicense global variable*/
-# include MY_LICENSE_UID /* USE YOUR LICENSE ID & PASSWORD It defines uis global structure*/
-#endif
+//#ifdef MY_LICENSE_H
+//# include MY_LICENSE_H  /* INCLUDE YOUR LICENSE FILE It defines babLicense global variable*/
+//# include MY_LICENSE_UID /* USE YOUR LICENSE ID & PASSWORD It defines uis global structure*/
+//#endif
+#include "/home/kerigan/projects/wire-os-victor/3rd/acapela/AcapelaTTS_for_LinuxEmbedded_V8.511/license/babile/babjYna.lic.h"
+#include "/home/kerigan/projects/wire-os-victor/3rd/acapela/AcapelaTTS_for_LinuxEmbedded_V8.511/license/babile/babjYna.lic.616e596a.password"
 	BABILE_Obj* bab=NULL;
 	BB_DbLs* pData=NULL; /* pointer to the data */
 
