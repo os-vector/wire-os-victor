@@ -1,11 +1,11 @@
-prefix=/home/kerigan/projects/libarchivevicos
+prefix=/home/kerigan/projects/vicdeps/libarchive
 exec_prefix=${prefix}
 libdir=${exec_prefix}/lib
 includedir=${prefix}/include
 
 Name: libarchive
 Description: library that can create and read several streaming archive formats
-Version: 3.9.0dev
+Version: 3.9.0
 Cflags: -I${includedir}
 Cflags.private: -DLIBARCHIVE_STATIC
 Libs: -L${libdir} -larchive
