@@ -1,4 +1,4 @@
-prefix=/Users/build/buildAgent/work/b5d3ba53e49a4b81/dist/libsodium/vicos
+prefix=/home/kerigan/projects/build-tools/build-tools/dist/libsodium/vicos
 exec_prefix=${prefix}
 libdir=${exec_prefix}/lib
 includedir=${prefix}/include
