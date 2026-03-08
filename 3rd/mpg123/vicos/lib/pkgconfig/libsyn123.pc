@@ -1,12 +1,12 @@
-prefix=/home/kerigan/projects/mpg123/outbuild
-exec_prefix=${prefix}
+prefix=/home/kerigan/projects/build-tools/build-tools/dist/mpg123/vicos
+exec_prefix=/home/kerigan/projects/build-tools/build-tools/dist/mpg123/vicos
 libdir=${exec_prefix}/lib
 includedir=${prefix}/include
 
 Name: libsyn123
 Description: A signal synthesis library accompanying mpg123
 Requires: 
-Version: 1.33.1-dev
+Version: 1.33.1
 Libs: -L${libdir} -lsyn123 
 Libs.private: -lm
 Cflags: -I${includedir} 
