@@ -39,7 +39,7 @@ typedef struct
 
 //
 // set default values for SVad config object
-void SVadSetDefaultConfig(SVadConfig_t *cp, int blockSize, float sampleRateHz);
+SE_SOFTFP_API void SVadSetDefaultConfig(SVadConfig_t *cp, int blockSize, float sampleRateHz);
 
 #endif
 #ifdef __cplusplus

@@ -66,10 +66,7 @@ set_target_properties(opencv_interface PROPERTIES
 
 if(VICOS)
   set(OPENCV_EXTERNAL_LIBS
-  #    libpng
-  #    libtiff
-      #cpufeatures # missing for vicos build?
-      libtbb) # NOT using turbo jpeg below
+      libtbb)
 else()
   set(OPENCV_EXTERNAL_LIBS
       IlmImf
@@ -84,7 +81,7 @@ else()
 endif()
 
 foreach(LIB ${OPENCV_EXTERNAL_LIBS})
-    add_library(${LIB} STATIC IMPORTED)
+    add_library(${LIB} SHARED IMPORTED)
     set_target_properties(${LIB} PROPERTIES
         IMPORTED_LOCATION
         ${OPENCV_3RDPARTY_LIB_DIR}/lib${LIB}.so)

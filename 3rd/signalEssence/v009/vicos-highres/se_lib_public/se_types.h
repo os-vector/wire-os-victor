@@ -103,6 +103,15 @@ typedef unsigned long long  uint64;
 #error SE_TYPES were not defined.  This is because somehow a SE_PLTFRM_<xyc> was not set, or se_types.h needs to be updated for your new platform.
 #endif
 
+// When calling softfp library functions from hardfp code, float args must
+// be passed in integer registers. This attribute forces the AAPCS (softfp)
+// calling convention on individual function declarations.
+#if defined(__ARM_PCS_VFP)
+#define SE_SOFTFP_API __attribute__((pcs("aapcs")))
+#else
+#define SE_SOFTFP_API
+#endif
+
 #define ZERO_STRUCT(struct_ptr) memset(struct_ptr, 0, sizeof *struct_ptr)
 #define ARRAY_SIZE(static_array) (sizeof(static_array)/sizeof(static_array[0]))
 
