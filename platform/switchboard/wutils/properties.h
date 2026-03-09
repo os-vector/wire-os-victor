@@ -24,8 +24,6 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "sys/system_properties.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -37,8 +35,8 @@ extern "C" {
 ** WARNING: system/bionic/include/sys/system_properties.h also defines
 **          these, but with different names.  (TODO: fix that)
 */
-#define PROPERTY_KEY_MAX   PROP_NAME_MAX
-#define PROPERTY_VALUE_MAX  PROP_VALUE_MAX
+#define PROPERTY_KEY_MAX  60
+#define PROPERTY_VALUE_MAX  60
 
 int property_get(const char* key, char* value, const char* default_value)
 {

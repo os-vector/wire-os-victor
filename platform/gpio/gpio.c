@@ -13,9 +13,15 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
-#include <utils/Compat.h>
 
 #include "gpio.h"
+
+#define TEMP_FAILURE_RETRY(exp) ({         \
+    typeof (exp) _rc;                      \
+    do {                                   \
+        _rc = (exp);                       \
+    } while (_rc == -1 && errno == EINTR); \
+    _rc; })
 
 typedef enum CoreAppErrorCode_t {
   app_SUCCESS = 0,

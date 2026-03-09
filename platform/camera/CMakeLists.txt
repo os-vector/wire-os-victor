@@ -30,8 +30,6 @@ target_compile_definitions(camera_client
   PRIVATE
   ${ANKI_BUILD_CXX_COMPILE_DEFINITIONS}
   USE_ION
-  USE_ANDROID_LOGGING=1
-
 )
 
 target_compile_options(camera_client

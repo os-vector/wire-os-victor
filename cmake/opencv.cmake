@@ -1,5 +1,5 @@
 if(VICOS)
-  set(OPENCV_3RDPARTY_LIB_DIR ${ANKI_THIRD_PARTY_DIR}/opencv/vicos/3rdparty/lib)
+  set(OPENCV_3RDPARTY_LIB_DIR ${ANKI_THIRD_PARTY_DIR}/opencv/vicos/lib)
 
   set(OPENCV_LIB_DIR ${ANKI_THIRD_PARTY_DIR}/opencv/vicos/lib)
 
@@ -65,11 +65,11 @@ set_target_properties(opencv_interface PROPERTIES
 )
 
 if(VICOS)
-  #set(OPENCV_EXTERNAL_LIBS
+  set(OPENCV_EXTERNAL_LIBS
   #    libpng
   #    libtiff
       #cpufeatures # missing for vicos build?
-  #    libjpeg) # NOT using turbo jpeg below
+      libtbb) # NOT using turbo jpeg below
 else()
   set(OPENCV_EXTERNAL_LIBS
       IlmImf
@@ -83,12 +83,12 @@ else()
       ittnotify)
 endif()
 
-#foreach(LIB ${OPENCV_EXTERNAL_LIBS})
-#    add_library(${LIB} STATIC IMPORTED)
-#    set_target_properties(${LIB} PROPERTIES
-#        IMPORTED_LOCATION
-#        ${OPENCV_3RDPARTY_LIB_DIR}/lib${LIB}.a)
-#endforeach()
+foreach(LIB ${OPENCV_EXTERNAL_LIBS})
+    add_library(${LIB} STATIC IMPORTED)
+    set_target_properties(${LIB} PROPERTIES
+        IMPORTED_LOCATION
+        ${OPENCV_3RDPARTY_LIB_DIR}/lib${LIB}.so)
+endforeach()
 
 #anki_build_target_license(libpng "libpng,${CMAKE_SOURCE_DIR}/licenses/libpng.license")
 #anki_build_target_license(libtiff "ISC,${CMAKE_SOURCE_DIR}/licenses/libtiff.license")
