@@ -19,7 +19,7 @@ set(CMAKE_IMPORT_FILE_VERSION 1)
 set(_cmake_targets_defined "")
 set(_cmake_targets_not_defined "")
 set(_cmake_expected_targets "")
-foreach(_cmake_expected_target IN ITEMS tbb opencv_core opencv_flann opencv_imgproc opencv_ml opencv_features2d opencv_imgcodecs opencv_calib3d opencv_gapi opencv_objdetect)
+foreach(_cmake_expected_target IN ITEMS opencv_core opencv_flann opencv_imgproc opencv_ml opencv_features2d opencv_imgcodecs opencv_calib3d opencv_gapi opencv_objdetect)
   list(APPEND _cmake_expected_targets "${_cmake_expected_target}")
   if(TARGET "${_cmake_expected_target}")
     list(APPEND _cmake_targets_defined "${_cmake_expected_target}")
@@ -54,14 +54,6 @@ get_filename_component(_IMPORT_PREFIX "${_IMPORT_PREFIX}" PATH)
 if(_IMPORT_PREFIX STREQUAL "/")
   set(_IMPORT_PREFIX "")
 endif()
-
-# Create imported target tbb
-add_library(tbb SHARED IMPORTED)
-
-set_target_properties(tbb PROPERTIES
-  INTERFACE_COMPILE_DEFINITIONS "TBB_USE_GCC_BUILTINS=1;__TBB_GCC_BUILTIN_ATOMICS_PRESENT=1;TBB_SUPPRESS_DEPRECATED_MESSAGES=1"
-  INTERFACE_LINK_LIBRARIES "c;m;dl"
-)
 
 # Create imported target opencv_core
 add_library(opencv_core SHARED IMPORTED)

@@ -5,20 +5,9 @@
 # Commands may need to know the format version.
 set(CMAKE_IMPORT_FILE_VERSION 1)
 
-# Import target "tbb" for configuration "Release"
-set_property(TARGET tbb APPEND PROPERTY IMPORTED_CONFIGURATIONS RELEASE)
-set_target_properties(tbb PROPERTIES
-  IMPORTED_LOCATION_RELEASE "${_IMPORT_PREFIX}/lib/libtbb.so"
-  IMPORTED_SONAME_RELEASE "libtbb.so"
-  )
-
-list(APPEND _cmake_import_check_targets tbb )
-list(APPEND _cmake_import_check_files_for_tbb "${_IMPORT_PREFIX}/lib/libtbb.so" )
-
 # Import target "opencv_core" for configuration "Release"
 set_property(TARGET opencv_core APPEND PROPERTY IMPORTED_CONFIGURATIONS RELEASE)
 set_target_properties(opencv_core PROPERTIES
-  IMPORTED_LINK_DEPENDENT_LIBRARIES_RELEASE "tbb"
   IMPORTED_LOCATION_RELEASE "${_IMPORT_PREFIX}/lib/libopencv_core.so.4.12.0"
   IMPORTED_SONAME_RELEASE "libopencv_core.so.412"
   )
@@ -89,7 +78,6 @@ list(APPEND _cmake_import_check_files_for_opencv_calib3d "${_IMPORT_PREFIX}/lib/
 # Import target "opencv_gapi" for configuration "Release"
 set_property(TARGET opencv_gapi APPEND PROPERTY IMPORTED_CONFIGURATIONS RELEASE)
 set_target_properties(opencv_gapi PROPERTIES
-  IMPORTED_LINK_DEPENDENT_LIBRARIES_RELEASE "tbb"
   IMPORTED_LOCATION_RELEASE "${_IMPORT_PREFIX}/lib/libopencv_gapi.so.4.12.0"
   IMPORTED_SONAME_RELEASE "libopencv_gapi.so.412"
   )
