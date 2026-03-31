@@ -338,10 +338,20 @@ list(APPEND AUDIO_ENGINE_LIBS
 )
 endif()
 
-target_link_libraries(audio_engine
-  PRIVATE
-  ${AUDIO_ENGINE_LIBS}
-)
+# prebuilt shim for ABI compatibility
+if(VICOS)
+  set(WWISE_SOFTFP_SHIM ${AUDIO_ENGINE_DIR}/wwiseSoftfpWrapper.o)
+  target_link_libraries(audio_engine
+    PRIVATE
+    ${AUDIO_ENGINE_LIBS}
+    ${WWISE_SOFTFP_SHIM}
+  )
+else()
+  target_link_libraries(audio_engine
+    PRIVATE
+    ${AUDIO_ENGINE_LIBS}
+  )
+endif()
 
 anki_build_strip(TARGET audio_engine)
 

@@ -26,6 +26,7 @@
 #include <AK/SoundEngine/Common/AkMemoryMgr.h>
 #include <AK/SoundEngine/Common/AkModule.h>
 #include <AK/SoundEngine/Common/AkSoundEngine.h>
+#include "wwiseSoftfpWrapper.h"
 #include <AK/SoundEngine/Common/AkStreamMgrModule.h>
 #include <AK/SoundEngine/Common/AkCallback.h>
 #include <AK/SoundEngine/Common/AkQueryParameters.h>
@@ -873,11 +874,11 @@ bool WwiseComponent::SetRTPCValue( AudioParameterId parameterId, AudioRTPCValue 
   if ( _isInitialized )
   {
     AkCurveInterpolation curveInterpolation = AudioCurveTypeToAkCurveInterpolation(curve);
-    AKRESULT result = AK::SoundEngine::SetRTPCValue( parameterId, rtpcValue, gameObject, valueChangeDuration, curveInterpolation );
+    AKRESULT result = wwiseShim_SetRTPCValue( parameterId, floatBitsToU32(rtpcValue), gameObject, valueChangeDuration, curveInterpolation, false );
     AUDIO_DEBUG( "WwiseComponent.SetRTPCValue: Set RTPC value %f on audio parameterId %d, result %d", rtpcValue, parameterId, result );
     success = ( AKRESULT::AK_Success == result);
   }
-  
+
   return success;
 }
 
@@ -885,11 +886,11 @@ bool WwiseComponent::SetRTPCValue( AudioParameterId parameterId, AudioRTPCValue 
 bool WwiseComponent::SetRTPCValueWithPlayingId( AudioParameterId parameterId, AudioRTPCValue rtpcValue, AudioPlayingId playingId, AudioTimeMs valueChangeDuration, AudioCurveType curve )
 {
   bool success = false;
-  
+
   if ( _isInitialized )
   {
     AkCurveInterpolation curveInterpolation = AudioCurveTypeToAkCurveInterpolation(curve);
-    AKRESULT result = AK::SoundEngine::SetRTPCValueByPlayingID( parameterId, rtpcValue, playingId, valueChangeDuration, curveInterpolation );
+    AKRESULT result = wwiseShim_SetRTPCValueByPlayingID( parameterId, floatBitsToU32(rtpcValue), playingId, valueChangeDuration, curveInterpolation, false );
     AUDIO_DEBUG( "WwiseComponent.SetRTPCValue: Set RTPC value %f on audio parameterId %d, result %d", rtpcValue, parameterId, result );
     success = ( AKRESULT::AK_Success == result);
   }
@@ -907,7 +908,9 @@ bool WwiseComponent::GetRTPCValue( AudioParameterId parameterId,
   bool success = false;
   if ( _isInitialized ) {
     auto inOut_type = ToRTCPValueType(inOut_rtpcValueType);
-    AKRESULT result = AK::SoundEngine::Query::GetRTPCValue( parameterId, gameObject, playingId, out_rtpcValue, inOut_type);
+    uint32_t valueBits;
+    AKRESULT result = wwiseShim_GetRTPCValue( parameterId, gameObject, playingId, &valueBits, &inOut_type);
+    out_rtpcValue = u32ToFloatBits(valueBits);
     AUDIO_DEBUG( "WwiseComponent.GetRTPCValue: Get RTPC value %f on audio parameterId %d, result %d", out_rtpcValue, parameterId, result );
     inOut_rtpcValueType = ToRTCPValueType(inOut_type);
     success = ( AKRESULT::AK_Success == result );
@@ -984,7 +987,7 @@ bool WwiseComponent::SetGameObjectOutputBusVolume( AudioGameObject emitterGameOb
   
   if ( _isInitialized )
   {
-    AKRESULT result = AK::SoundEngine::SetGameObjectOutputBusVolume( emitterGameObj, listenerGameObj, controlVolume );
+    AKRESULT result = wwiseShim_SetGameObjectOutputBusVolume( emitterGameObj, listenerGameObj, floatBitsToU32(controlVolume) );
     AUDIO_LOG( "WwiseComponent.SetGameObjectOutputBusVolume: Set EmitterGameObj %u listenerGameObj %u output bus volume %f, result %d",
               emiterGameObj, listenerGameObj, controlVolume, result );
     success = ( AKRESULT::AK_Success == result);
