@@ -17,6 +17,7 @@
     "GoHomeVoiceCommand",
     "RollCubeVoiceCommand",
     "PopAWheelieVoiceCommand",
+    "KeepawayVoiceCommand",
     "WireTest",
     "BlackJackVoiceCommand",
     "PRDemoComeHere",
