@@ -44,6 +44,7 @@ namespace{
   // add behavior _classes_ here if we should disable the prox-based "react to sudden obstacle" behavior while
   // _any_ behavior of that class is running below us on the stack
   static const std::set<BehaviorClass> kBehaviorClassesToSuppressProx = {{ BEHAVIOR_CLASS(BlackJack),
+                                                                           BEHAVIOR_CLASS(CubeDrive),
                                                                            BEHAVIOR_CLASS(FistBump),
                                                                            BEHAVIOR_CLASS(FindCube),
                                                                            BEHAVIOR_CLASS(Keepaway),
@@ -55,6 +56,7 @@ namespace{
                                                                            BEHAVIOR_CLASS(PossiblePerformance) }};
 
   static const std::set<BehaviorClass> kBehaviorClassesToSuppressReactToSound = {{ BEHAVIOR_CLASS(BlackJack),
+                                                                                   BEHAVIOR_CLASS(CubeDrive),
                                                                                    BEHAVIOR_CLASS(DanceToTheBeat),
                                                                                    BEHAVIOR_CLASS(FetchCube),
                                                                                    BEHAVIOR_CLASS(FistBump),
@@ -72,10 +74,11 @@ namespace{
                                                                             BEHAVIOR_CLASS(PossiblePerformance) }};
 
   static const std::set<BehaviorClass> kBehaviorClassesToSuppressCliff = {{ BEHAVIOR_CLASS(BlackJack),
-                                                                            BEHAVIOR_CLASS(FetchCube) }};
+                                                                            BEHAVIOR_CLASS(CubeDrive) }};
 
   static const std::set<BehaviorClass> kBehaviorClassesToSuppressTimerAntics = {{ BEHAVIOR_CLASS(BlackJack),
                                                                                   BEHAVIOR_CLASS(CoordinateWeather),
+                                                                                  BEHAVIOR_CLASS(CubeDrive),
                                                                                   BEHAVIOR_CLASS(PossiblePerformance) }};
 
   static const std::set<BehaviorID> kBehaviorIDsToSuppressWhenMeetVictor = {{
