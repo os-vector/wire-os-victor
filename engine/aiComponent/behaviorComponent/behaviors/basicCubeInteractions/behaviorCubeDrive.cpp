@@ -13,10 +13,11 @@
  *
  **/
 
-#include "engine/aiComponent/behaviorComponent/behaviors/devBehaviors/behaviorCubeDrive.h"
+#include "engine/aiComponent/behaviorComponent/behaviors/basicCubeInteractions/behaviorCubeDrive.h"
 #include "anki/cozmo/shared/cozmoConfig.h"
 #include "clad/types/activeObjectAccel.h"
 #include "coretech/common/engine/utils/timer.h"
+#include "engine/actions/animActions.h"
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/beiRobotInfo.h"
 #include "engine/block.h"
 #include "engine/blockWorld/blockWorld.h"
@@ -174,6 +175,8 @@ void BehaviorCubeDrive::OnBehaviorActivated() {
 
   RestartAnimation();
 
+  DelegateIfInControl( new TriggerAnimationAction( AnimationTriggerFromString("FetchCubeSuccess") ) );
+
   Vec3f filterCoeffs(1.0f, 1.0f, 1.0f);
   _dVars.filteredCubeAccel = std::make_shared<ActiveAccel>();
   _dVars.lowPassFilterListener = std::make_shared<CubeAccelListeners::LowPassFilterListener>(
@@ -224,6 +227,9 @@ void BehaviorCubeDrive::BehaviorUpdate() {
     rightWheelMmps -= yGs * 250.0f;
 
     float deadZoneSize = _iConfig.deadZoneSize;
+
+    DelegateIfInControl( new TriggerAnimationAction( AnimationTriggerFromString("ObservingIdleEyesOnly") ) );
+
     if (abs(leftWheelMmps) < deadZoneSize) {
       leftWheelMmps = 0.0f;
     } else {

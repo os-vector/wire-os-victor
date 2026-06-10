@@ -3,7 +3,7 @@
   "behaviorID": "CubeDrive",
 
   "triggerLiftGs": 0.5,
-  "deadZoneSize": 13.0,
+  "deadZoneSize": 15.0,
   "timeBetweenLiftActions": 0.75,
   "highHeadAngle": 0.3,
   "lowHeadAngle": 0.0
