@@ -7,7 +7,7 @@
   ],
 
   "behaviors": [
-    "ConnectToCubeAndThen",
+    "ConnectToCube",
     "CubeDrive"
   ],
 

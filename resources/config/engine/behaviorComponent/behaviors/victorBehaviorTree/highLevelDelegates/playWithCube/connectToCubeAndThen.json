@@ -1,7 +1,0 @@
-{
-  "behaviorID" : "ConnectToCubeAndThen",
-  "behaviorClass" : "ConnectToCubeAndThen",
-  "delegateBehaviorID": "ConnectToCube",
-
-  "postBehaviorSuggestion": "Socialize"
-}

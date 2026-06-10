@@ -96,7 +96,6 @@ enum uint_16 BehaviorID {
   ComeHereVoiceCommand,
   ConfirmHabitat,
   ConnectToCube,
-  ConnectToCubeAndThen,
   CoordinateGlobalInterrupts,
   CoordinateInHabitat,
   CoordinateWhileHeldInPalm,
