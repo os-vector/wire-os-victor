@@ -169,6 +169,7 @@ union dupes_allowed UserIntent
   UserIntent_Void             play_anygame,
   UserIntent_Void             play_anytrick,
   UserIntent_Void             play_blackjack,
+  UserIntent_Void             play_cubedrive,
   UserIntent_Void             play_fistbump,
   UserIntent_Void             play_keepaway,
   UserIntent_Void             play_pickupcube,

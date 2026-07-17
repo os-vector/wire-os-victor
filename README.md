@@ -105,7 +105,7 @@ vbuild
 <br />
 
 - Prereqs: Make sure you have [brew](https://brew.sh/) installed.
-  -  Then: `brew install ccache wget upx ninja pkg-config`
+  -  Then: `brew install ccache gcc ninja pkg-config upx wget`
 
 1. Clone the repo and cd into it:
 

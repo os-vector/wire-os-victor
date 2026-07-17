@@ -342,6 +342,8 @@ fi
 HOST=`uname -a | awk '{print tolower($1);}' | sed -e 's/darwin/mac/'`
 if [[ `uname -a` == *"aarch64"* && $HOST == "linux" ]]; then
 	HOST+="-arm64"
+elif [[ `uname -a` == *"aarch64"* && $HOST == "mac" ]]; then
+	HOST+="-arm64"
 fi
 PROTOBUF_HOME=${TOPLEVEL}/3rd/protobuf/${HOST}
 

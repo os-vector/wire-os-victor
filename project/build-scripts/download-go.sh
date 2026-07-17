@@ -13,7 +13,7 @@ ADEPS="$HOME/.anki"
 if [[ "$(uname -a)" == *"x86_64"* && "$(uname -a)" == *"Linux"* ]]; then
     HOST="linux-amd64"
     elif [[ "$(uname -a)" == *"arm64"* && "$(uname -a)" == *"Darwin"* ]]; then
-    HOST="darwin-amd64"
+    HOST="darwin-arm64"
     elif [[ "$(uname -a)" == *"aarch64"* && "$(uname -a)" == *"Linux"* ]]; then
     HOST="linux-arm64"
 else
