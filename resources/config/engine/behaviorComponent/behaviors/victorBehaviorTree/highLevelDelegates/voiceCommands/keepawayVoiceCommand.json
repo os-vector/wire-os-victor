@@ -1,0 +1,21 @@
+{
+  "behaviorID" : "KeepawayVoiceCommand",
+  "behaviorClass" : "DispatcherQueue",
+
+  "wantsToBeActivatedCondition": {
+    "conditionType": "FeatureGate",
+    "feature": "Keepaway"
+  },
+
+  "respondToUserIntents" : [
+    { "type" : "play_keepaway" }
+  ],
+
+  "behaviors": [
+    "DriveOffChargerCube",
+    "FindCubeAndPlayKeepaway"
+  ],
+
+  "postBehaviorSuggestion": "Socialize"
+
+}

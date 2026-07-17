@@ -338,9 +338,13 @@
       "feature_gate": "EyeColorVC"
     },
     {
+      "cloud_intent": "intent_play_keepaway",
+      "user_intent": "play_keepaway"
+    },
+    {
       "cloud_intent": "intent_play_cubedrive",
       "user_intent": "play_cubedrive"
-     }
+    }
   ],
 
   "unmatched_intent": "unmatched_intent"
