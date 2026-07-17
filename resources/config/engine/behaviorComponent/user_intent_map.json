@@ -336,7 +336,11 @@
       "user_intent": "imperative_eyecolor",
       "cloud_intent": "intent_imperative_eyecolor",
       "feature_gate": "EyeColorVC"
-    }
+    },
+    {
+      "cloud_intent": "intent_play_cubedrive",
+      "user_intent": "play_cubedrive"
+     }
   ],
 
   "unmatched_intent": "unmatched_intent"

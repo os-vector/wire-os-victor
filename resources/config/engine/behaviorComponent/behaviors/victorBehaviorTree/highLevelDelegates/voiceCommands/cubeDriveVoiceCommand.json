@@ -1,0 +1,17 @@
+{
+  "behaviorID" : "CubeDriveVoiceCommand",
+  "behaviorClass" : "DispatcherQueue",
+
+  "respondToUserIntents" : [
+    { "type" : "play_cubedrive" }
+  ],
+
+  "behaviors": [
+    "DriveOffChargerCube",
+    "ConnectToCube",
+    "CubeDrive"
+  ],
+
+  "postBehaviorSuggestion": "Socialize"
+
+}

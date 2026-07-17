@@ -17,8 +17,6 @@ enum uint_16 BehaviorID {
 
   // devBehaviors
   AcousticTestMode,
-  CubeDrive,
-  CubeDriveConnectionGate,
   DevBaseBehavior,
   DevBatteryLogging,
   DevCubeSpinner,
@@ -261,6 +259,7 @@ enum uint_16 BehaviorID {
   VectorPlaysCubeSpinner,
 
   // victorBehaviorTree/highLevelDelegates/playWithCube
+  CubeDrive,
   FetchCube,
   FindCube,
   FindCubeAndThen,
@@ -305,6 +304,7 @@ enum uint_16 BehaviorID {
 
   // victorBehaviorTree/highLevelDelegates/voiceCommands
   BlackJackVoiceCommand,
+  CubeDriveVoiceCommand,
   DoATrickVoiceCommand,
   EyeColorVoiceCommand,
   FetchCubeVoiceCommand,
