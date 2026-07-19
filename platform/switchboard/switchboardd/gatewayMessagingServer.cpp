@@ -295,6 +295,12 @@ bool GatewayMessagingServer::SendMessage(const SwitchboardResponse& message) {
       _server.Disconnect();
       return false;
     }
+    if (res == 0) {
+      // Would-block (LocalUdpServer::Send tri-state contract): the datagram was
+      // dropped but the client is kept. Report the drop honestly — returning true
+      // here would claim a dropped message was delivered.
+      return false;
+    }
     return true;
   }
   return false;

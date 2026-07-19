@@ -40,6 +40,20 @@ public:
   void SetBindClients(bool value) { _bindClients = value; }
 
   // Client transport
+  //
+  // Send returns the number of bytes sent, or:
+  //   0  - the send would block (EAGAIN/EWOULDBLOCK on this non-blocking socket).
+  //        The datagram was dropped but the client is still connected; the caller
+  //        may retry later and MUST NOT treat this as a broken channel.
+  //   -1 - hard socket error or no client. The channel is broken; callers that
+  //        own the client lifecycle should Disconnect().
+  // (0 is also returned for a zero-size send, which sends nothing.)
+  //
+  // Recv returns the number of bytes received, or:
+  //   0  - nothing to read (would-block / zero-length datagram / connection
+  //        packet). NOT an error; the client is kept.
+  //   -1 - hard socket error. Callers that own the client lifecycle decide
+  //        whether to Disconnect().
   ssize_t Send(const char* data, size_t size);
   ssize_t Recv(char* data, size_t maxSize);
 

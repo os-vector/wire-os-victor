@@ -181,6 +181,17 @@ ssize_t LocalUdpServer::Send(const char* data, size_t size)
     bytes_sent = sendto(_socket, data, size, 0, (sockaddr*)&_client, socklen);
   }
 
+  if (bytes_sent < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+    // Transient backpressure: the peer's kernel buffer is momentarily full and this
+    // is a non-blocking socket. The datagram is dropped, but the client connection
+    // is still healthy — report 0 so callers keep the client and retry later,
+    // instead of tearing down the sole client on a recoverable condition.
+    LOG_WARNING("LocalUdpServer.Send.WouldBlock",
+                "Dropped %zu-byte datagram on %s (sock: %d): send would block; client kept",
+                size, _sockname.c_str(), _socket);
+    return 0;
+  }
+
   if (bytes_sent != size) {
     // If send fails, log it and report it to caller.  It is caller's responsibility to retry at
     // some appropriate interval.
@@ -200,16 +211,23 @@ ssize_t LocalUdpServer::Recv(char* data, size_t maxSize)
 
   const ssize_t bytes_received = recvfrom(_socket, data, maxSize, 0, (struct sockaddr *)&saddr, &saddrlen);
 
-  if (bytes_received <= 0) {
-    if (errno == EWOULDBLOCK) {
+  if (bytes_received == 0) {
+    // Zero-length datagram (legal on DGRAM). errno is NOT meaningful here — the
+    // old `<= 0` + errno test read a stale errno on this path and could surface a
+    // spurious -1 (which callers such as the robot HAL radio turn into a
+    // DisconnectRadio). Treat as "no data".
+    return 0;
+  }
+
+  if (bytes_received < 0) {
+    if (errno == EAGAIN || errno == EWOULDBLOCK) {
       //LOG_DEBUG("LocalUdpServer.Recv", "No data available");
       return 0;
-    } else {
-      LOG_ERROR("LocalUdpServer.Recv.Fail",
-                "Receive error on %s (sock: %d) (%s)",
-                _sockname.c_str(), _socket, strerror(errno));
-      return -1;
     }
+    LOG_ERROR("LocalUdpServer.Recv.Fail",
+              "Receive error on %s (sock: %d) (%s)",
+              _sockname.c_str(), _socket, strerror(errno));
+    return -1;
   }
 
   //LOG_DEBUG("LocalUdpServer.Recv", "Received %zd bytes from %s", bytes_received, to_string(saddr, saddrlen).c_str());

@@ -77,6 +77,18 @@ namespace Anki {
     {
       if (server.HasClient()) {
         const ssize_t bytesSent = server.Send((char*)buffer, length);
+        if (bytesSent == 0) {
+          // Would-block (LocalUdpServer::Send tri-state contract): the anim
+          // process's kernel receive queue is momentarily full. The datagram is
+          // dropped but the anim client is KEPT — do NOT DisconnectRadio() on a
+          // transient condition. Pre-#26 this hit `bytesSent < length` because
+          // Send returned -1 on EAGAIN; post-#26 it returns the 0 sentinel, which
+          // still routed to the teardown below until this branch. In-tree
+          // precedent: hal.cpp's spine read already maps EAGAIN -> 0.
+          AnkiWarn("HAL.RadioSendPacket.WouldBlock",
+                   "Dropped %zu-byte packet: send would block; client kept", length);
+          return false;
+        }
         if (bytesSent < (ssize_t) length) {
           AnkiError("HAL.RadioSendPacket.FailedToSend", "Failed to send msg contents (%zd/%zu sent)", bytesSent, length);
           DisconnectRadio(false);

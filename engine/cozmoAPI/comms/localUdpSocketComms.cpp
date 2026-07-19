@@ -120,6 +120,14 @@ bool LocalUdpSocketComms::SendMessageInternal(const Comms::MsgPacket& msgPacket)
       _udpServer->Disconnect();
       return false;
     }
+    if (res == 0) {
+      // Send would block (peer's kernel buffer full under load). The datagram is
+      // dropped but the client is intact — do NOT Disconnect(). LocalUdpServer is
+      // one-client-per-server, so disconnecting here on a transient EAGAIN severed
+      // the sole gateway client and every subsequent response was dropped
+      // ("No client") until the next boot.
+      return false;
+    }
     return true;
   }
   return false;

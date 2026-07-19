@@ -204,7 +204,23 @@ bool SendPacketToEngine(const void *buffer, const u32 length)
   }
 
   const ssize_t bytesSent = _engineComms.Send((char*)buffer, length);
+  if (bytesSent == 0) {
+    // Would-block (LocalUdpServer::Send tri-state contract): the engine's kernel
+    // receive queue is momentarily full. The datagram is dropped but the engine
+    // client is KEPT — do NOT DisconnectEngine(). _engineComms is
+    // one-client-per-server and InitComms() runs once per boot, so tearing down
+    // here on a transient EAGAIN would sever anim->engine for the rest of the boot
+    // (permanent NO_ROBOT_COMMS). Pre-#26 this hit `bytesSent < length` because
+    // Send returned -1 on EAGAIN; post-#26 it returns the 0 sentinel, which still
+    // routed here until this branch.
+    LOG_WARNING("AnimComms.SendPacketToEngine.WouldBlock",
+                "Dropped %d-byte packet to engine: send would block; client kept", length);
+    return false;
+  }
   if (bytesSent < (ssize_t) length) {
+    // Hard error (-1; a >0 partial send cannot happen on DGRAM). LocalUdpServer
+    // does not tear down its client registration internally, so that is still
+    // this caller's job on a genuinely broken channel.
     LOG_ERROR("AnimComms.SendPacketToEngine.FailedSend",
               "Failed to send msg contents (%zd of %d bytes sent)",
               bytesSent, length);
@@ -238,7 +254,19 @@ bool SendPacketToRobot(const void *buffer, const u32 length)
   }
 
   const ssize_t bytesSent = _robotComms.Send((const char*)buffer, length);
+  if (bytesSent == 0) {
+    // Would-block (LocalUdpClient::Send tri-state contract): the datagram was
+    // dropped but the socket is KEPT — do NOT DisconnectRobot() on a transient
+    // condition. (A 0 with IsConnected() false would mean "socket undefined", but
+    // that is unreachable here because of the IsConnected() guard above.)
+    LOG_WARNING("SendPacketToRobot.WouldBlock",
+                "Dropped %d-byte packet to robot: send would block; connection kept", length);
+    return false;
+  }
   if (bytesSent < (ssize_t) length) {
+    // Hard error (-1): LocalUdpClient::Send has already Disconnect()ed the socket
+    // internally; the DisconnectRobot() below is a harmless idempotent no-op kept
+    // for defensiveness.
     LOG_ERROR("SendPacketToRobot.FailedSend", "Failed to send msg contents (%zd bytes sent)", bytesSent);
     DisconnectRobot();
     return false;

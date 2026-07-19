@@ -24,10 +24,14 @@
 // Define this to enable logs
 #define LOG_CHANNEL                    "LocalUdpClient"
 
-#ifdef VICOS
-// todo: restore logging when vicos toolchain is available -PRA (approved by BRC)
-#undef LOG_CHANNEL
-#endif
+// NOTE: this file historically undefined LOG_CHANNEL on VICOS ("todo: restore
+// logging when vicos toolchain is available -PRA"). The sibling primitive
+// LocalUdpServer.cpp compiles the identical CORETECH_LOG_* macros for VICOS
+// today (its LocalUdpServer.Send.WouldBlock line is what the deployed engine
+// binary logs on the robot), so the toolchain limitation is long gone. Logging
+// is restored here because the Send.WouldBlock warning below is the on-robot
+// evidence that a datagram was dropped for backpressure (vs a dead socket) —
+// it must be visible to verify the client-side legs on deploy day.
 
 #ifdef  LOG_CHANNEL
 #define LOG_ERROR(name, format, ...)   CORETECH_LOG_ERROR(name, format, ##__VA_ARGS__)
@@ -161,6 +165,10 @@ bool LocalUdpClient::Disconnect()
 ssize_t LocalUdpClient::Send(const char* data, size_t size)
 {
   if (_socket < 0) {
+    // Pre-existing sentinel collision: this path ALSO returns 0 (see the header
+    // contract). Distinguishable from a would-block 0 at the call site because
+    // IsConnected() is false here, and by this ERROR log vs the WouldBlock
+    // WARNING below.
     LOG_ERROR("LocalUdpClient.Send", "Socket undefined, skipping send");
     return 0;
   }
@@ -169,9 +177,21 @@ ssize_t LocalUdpClient::Send(const char* data, size_t size)
 
   const ssize_t bytes_sent = send(_socket, data, size, 0);
 
+  if (bytes_sent < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+    // Transient backpressure: the peer's kernel buffer is momentarily full and this
+    // is a non-blocking socket. The datagram is dropped, but the socket is still
+    // healthy — report 0 so callers keep the connection and retry later, instead of
+    // tearing down the channel on a recoverable condition. Mirrors the
+    // LocalUdpServer::Send would-block contract (fork #26 / orchestrator #4689).
+    LOG_WARNING("LocalUdpClient.Send.WouldBlock",
+                "Dropped %zu-byte datagram on %s (sock: %d): send would block; socket kept",
+                size, _sockname.c_str(), _socket);
+    return 0;
+  }
+
   if (bytes_sent != size) {
-    LOG_ERROR("LocalUdpClient.Send.Fail", 
-              "Send error on %s (sock: %d), disconnecting (%s)", 
+    LOG_ERROR("LocalUdpClient.Send.Fail",
+              "Send error on %s (sock: %d), disconnecting (%s)",
               _sockname.c_str(), _socket, strerror(errno));
     Disconnect();
     return -1;
@@ -191,17 +211,23 @@ ssize_t LocalUdpClient::Recv(char* data, size_t maxSize)
 
   const ssize_t bytes_received = recv(_socket, data, maxSize, 0);
 
-  if (bytes_received <= 0) {
-    if (errno == EWOULDBLOCK) {
+  if (bytes_received == 0) {
+    // Zero-length datagram (legal on DGRAM). errno is NOT meaningful here — the
+    // old `<= 0` + errno test read a stale errno on this path and could spuriously
+    // Disconnect the channel. Treat as "no data".
+    return 0;
+  }
+
+  if (bytes_received < 0) {
+    if (errno == EAGAIN || errno == EWOULDBLOCK) {
       //LOG_DEBUG("LocalUdpClient.Recv", "No data available");
       return 0;
-    } else {
-      LOG_ERROR("LocalUdpClient.Recv.Fail", 
-                "Receive error on %s (sock: %d), dropping connection (%s)", 
-                _sockname.c_str(), _socket, strerror(errno));
-      Disconnect();
-      return -1;
     }
+    LOG_ERROR("LocalUdpClient.Recv.Fail",
+              "Receive error on %s (sock: %d), dropping connection (%s)",
+              _sockname.c_str(), _socket, strerror(errno));
+    Disconnect();
+    return -1;
   }
 
   //LOG_DEBUG("LocalUdpClient.Recv", "Received %zd bytes", bytes_received);

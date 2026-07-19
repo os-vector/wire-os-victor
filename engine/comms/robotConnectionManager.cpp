@@ -149,6 +149,21 @@ bool RobotConnectionManager::SendData(const uint8_t* buffer, unsigned int size)
   }
 
   const ssize_t sent = _udpClient.Send((const char *) buffer, size);
+  if (sent == 0) {
+    // Would-block (LocalUdpClient::Send tri-state contract): the anim process's
+    // kernel receive queue is momentarily full. The datagram is dropped but the
+    // socket is KEPT — do NOT DisconnectCurrent(). Pre-contract this fell into the
+    // `sent != size` teardown below, so ONE transient EAGAIN on the engine->anim
+    // socket made Update() return RESULT_FAIL_IO_CONNECTION_CLOSED and the engine
+    // treated the physical robot as gone (reverse direction of the engine->gateway
+    // jam fixed on the LocalUdpServer side, fork #26 / orchestrator #4689).
+    // Note: Send also returns 0 for an undefined socket, but then IsConnected() is
+    // already false and Update() reports CONNECTION_CLOSED anyway, so no teardown
+    // is lost by returning early here.
+    LOG_WARNING("RobotConnectionManager.SendData.WouldBlock",
+                "Dropped %u-byte message to robot: send would block; connection kept", size);
+    return false;
+  }
   if (sent != size) {
     LOG_ERROR("RobotConnectionManager.SendData.Error", "Sent %zd/%d bytes to robot", sent, size);
     DisconnectCurrent();
