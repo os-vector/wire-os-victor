@@ -1,5 +1,0 @@
-{
-  "behaviorID": "CubeDriveConnectionGate",
-  "behaviorClass": "ConnectToCube",
-  "delegateBehaviorID": "CubeDrive"
-}

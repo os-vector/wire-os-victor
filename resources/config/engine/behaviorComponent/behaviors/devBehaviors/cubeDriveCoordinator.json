@@ -1,9 +1,0 @@
-{
-  "behaviorClass": "DispatcherQueue",
-  "behaviorID": "CubeDriveConnectionGate",
-  "behaviors": [
-    "ConnectToCube",
-    "CubeDrive"
-  ]
-}
-
