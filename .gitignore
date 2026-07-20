@@ -425,3 +425,5 @@ snowboy/server/main
 
 oe-logs
 oe-workdir
+
+.sim/
