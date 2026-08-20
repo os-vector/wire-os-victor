@@ -222,6 +222,9 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
   ADD_SCREEN(FAC, None);
   ADD_SCREEN(CustomText, None);
   ADD_SCREEN(Main, Network);
+  ADD_SCREEN_WITH_TEXT(UserDataSubmenu, UserDataSubmenu, {"DATA OPTIONS"});
+  ADD_SCREEN_WITH_TEXT(Reonboarding, Reonboarding, {"REONBOARDING..."});
+  ADD_SCREEN_WITH_TEXT(Reonboard, Reonboard, {"REONBOARD?"});
   ADD_SCREEN_WITH_TEXT(ClearUserData, Main, {"CLEAR OUT SOUL?"});
   ADD_SCREEN_WITH_TEXT(ClearUserDataFail, Main, {"UNABLE TO CLEAR SOUL"});
   ADD_SCREEN_WITH_TEXT(Rebooting, Rebooting, {"Vector will remember that..."});
@@ -317,7 +320,12 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
 #if ENABLE_SELF_TEST
   ADD_MENU_ITEM(Main, IsXray() ? "TEST" : "SELF TEST", SelfTest);
 #endif
-  ADD_MENU_ITEM(Main, IsXray() ? "CLEAR" : "CLEAR OUT SOUL", ClearUserData);
+  ADD_MENU_ITEM(Main, IsXray() ? "DATA" : "DATA OPTIONS", UserDataSubmenu);
+
+  ADD_MENU_ITEM(UserDataSubmenu, "EXIT", Main);
+  ADD_MENU_ITEM(UserDataSubmenu, "REONBOARD", Reonboard);
+  ADD_MENU_ITEM(UserDataSubmenu, "CLEAR OUT SOUL", ClearUserData);
+  DISABLE_TIMEOUT(UserDataSubmenu);
 
   // === Self test screen ===
   ADD_MENU_ITEM(SelfTest, "EXIT", Main);
@@ -331,6 +339,17 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
   ADD_MENU_ITEM_WITH_ACTION(SelfTest, "CONFIRM", confirmSelfTest);
   DISABLE_TIMEOUT(SelfTestRunning);
   
+  // === Reonboard screen ===
+  FaceInfoScreen::MenuItemAction confirmReonboard = [] {
+    LOG_INFO("FaceInfoScreenManager.Reonboard.Confirmed", "");
+    (void)system("cd /data/data/com.anki.victor/persistent && rm -f onboarding/onboardingState.json token/token.jwt ../../server_config.json");
+    (void)system("curl 'http://localhost:8080/api/extra/restartvic' &");
+    return ScreenName::Reonboarding;
+  };
+  ADD_MENU_ITEM(Reonboard, "BACK", UserDataSubmenu);
+  ADD_MENU_ITEM_WITH_ACTION(Reonboard, "CONFIRM", confirmReonboard);
+  DISABLE_TIMEOUT(Reonboard);
+
   // Clear User Data menu
   FaceInfoScreen::MenuItemAction confirmClearUserData = [this]() {
     // Write this file to indicate that the data partition should be wiped on reboot
@@ -344,9 +363,9 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
     this->Reboot();
     return ScreenName::Rebooting;
   };
-  ADD_MENU_ITEM(ClearUserData, "EXIT", Main);
+  ADD_MENU_ITEM(ClearUserData, "EXIT", UserDataSubmenu);
   ADD_MENU_ITEM_WITH_ACTION(ClearUserData, "CONFIRM", confirmClearUserData);
-  SET_TIMEOUT(ClearUserDataFail, 2.f, Main);
+  SET_TIMEOUT(ClearUserDataFail, 2.f, UserDataSubmenu);
 
 
   // === Network screen ===
@@ -1986,7 +2005,11 @@ void FaceInfoScreenManager::EnableMirrorModeScreen(bool enable)
 
 void FaceInfoScreenManager::DrawScratch()
 {
-  _currScreen->DrawMenu(*_scratchDrawingImg);
+  if (_currScreen == GetScreen(ScreenName::UserDataSubmenu)) {
+    _currScreen->DrawMenuVertical(*_scratchDrawingImg);
+  } else {
+    _currScreen->DrawMenu(*_scratchDrawingImg);
+  }
 
   // Draw white pixel in top-right corner of main customer support screen
   // to indicate that debug screens are unlocked
