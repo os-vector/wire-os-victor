@@ -20,7 +20,7 @@ namespace Vector {
   // RobotID will be appended to generate unique paths for each robot.
   //
 
-  #ifdef SIMULATOR
+  #if defined(SIMULATOR) || defined(STANDALONE_SIM)
   #define LOCAL_SOCKET_PATH                         "/tmp/"
   #else
   #define LOCAL_SOCKET_PATH                         "/dev/socket/"

@@ -508,7 +508,7 @@ namespace Anki {
 
             // Apply height
             LiftController::SetDesiredHeight(liftHeight);
-#ifdef SIMULATOR
+#if defined(SIMULATOR) || defined(STANDALONE_SIM)
             // If we are picking up a block, engage the gripper now, so that we engage with the block as soon as we
             // encounter it. Otherwise, the block may 'slide' to the side as we begin pushing it. Note: This is
             // slightly more realistic, since the real-life forks "hook into" the cube, preventing lateral movement.

@@ -52,14 +52,19 @@ target_include_directories(robot_hal
 target_compile_options(robot_hal
   PRIVATE
   ${ANKI_BUILD_CXX_COMPILE_OPTIONS}
-  ${ASAN_CXX_FLAGS} 
+  ${ASAN_CXX_FLAGS}
 )
+
+if (STANDALONE_SIM)
+  target_compile_options(robot_hal PRIVATE ${STANDALONE_SIM_NOWARN})
+endif()
 
 target_compile_definitions(robot_hal
   PRIVATE
   COZMO_ROBOT
   ${PLATFORM_COMPILE_DEFS}
   ${ANKI_BUILD_CXX_COMPILE_DEFINITIONS}
+  $<$<BOOL:${STANDALONE_SIM}>:HAL_DUMMY_BODY>
   #HAL_DUMMY_BODY # Uncomment if deploying on head only
 )
 
@@ -237,14 +242,21 @@ if (VICOS)
     CORETECH_ROBOT
     ${PLATFORM_COMPILE_DEFS}
     ${ANKITRACE}
+    $<$<BOOL:${STANDALONE_SIM}>:HAL_DUMMY_BODY>
     #HAL_DUMMY_BODY # Uncomment if deploying on head only
   )
+
+  if (STANDALONE_SIM)
+    target_compile_options(vic-robot PRIVATE ${STANDALONE_SIM_NOWARN})
+  endif()
 
   target_include_directories(vic-robot
     PRIVATE
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/robot/hal>
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/robot/hal/include>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/robot/hal/src>
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/robot/syscon>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/simulator/bridge>
   )
 
   target_link_libraries(vic-robot

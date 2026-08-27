@@ -172,9 +172,11 @@ int main(int argc, const char* argv[])
   setlinebuf(stdout);
   setlinebuf(stderr);
 
+#ifndef STANDALONE_SIM
   struct sched_param params;
   params.sched_priority = sched_get_priority_max(SCHED_FIFO);
   sched_setscheduler(0, SCHED_FIFO, &params);
+#endif
 
   signal(SIGTERM, Shutdown);
 

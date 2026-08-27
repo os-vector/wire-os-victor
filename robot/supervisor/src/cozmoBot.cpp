@@ -96,6 +96,7 @@ namespace Anki {
         const u32 MAIN_TOO_LONG_TIME_THRESH_USEC = 4000;
         const u32 MAIN_CYCLE_ERROR_REPORTING_PERIOD_USEC = 1000000;
 
+#ifndef STANDALONE_SIM
         // If there are more than this many TooLates in a reporting period
         // a warning is issued
         const u32 MIN_TOO_LATE_COUNT_PER_REPORTING_PERIOD = 5;
@@ -111,6 +112,7 @@ namespace Anki {
         // If a single tick takes this long in a reporting period
         // a warning is issued
         const u32 INSTANT_WARNING_TOO_LONG_TIME_THRESH_USEC = 10000;
+#endif // !STANDALONE_SIM
 
         u32 lastOnChargerChangedTime_ms_ = 0;
 
@@ -570,6 +572,17 @@ namespace Anki {
         //////////////////////////////////////////////////////////////
 
         MARK_NEXT_TIME_PROFILE(CozmoBot, EYEHEADLIFT);
+#ifdef STANDALONE_SIM
+        {
+          static bool calibratedOnLiveBody = false;
+          if (!calibratedOnLiveBody && HAL::SimBodyIsLive()) {
+            calibratedOnLiveBody = true;
+            const bool autoStarted = true;
+            LiftController::StartCalibrationRoutine(autoStarted, MotorCalibrationReason::Startup);
+            HeadController::StartCalibrationRoutine(autoStarted, MotorCalibrationReason::Startup);
+          }
+        }
+#endif
         HeadController::Update();
         LiftController::Update();
 
@@ -629,7 +642,7 @@ namespace Anki {
 
         // Report main cycle time error
         if (nextMainCycleTimeErrorReportTime_usec_ < cycleEndTime) {
-
+#ifndef STANDALONE_SIM
           const bool reportTooLate = (mainTooLateCnt_ >= MIN_TOO_LATE_COUNT_PER_REPORTING_PERIOD) || 
                                      (maxMainTooLateTime_usec_ >= INSTANT_WARNING_TOO_LATE_TIME_THRESH_USEC);
           const bool reportTooLong = (mainTooLongCnt_ >= MIN_TOO_LONG_COUNT_PER_REPORTING_PERIOD) || 
@@ -660,6 +673,7 @@ namespace Anki {
             }
 
           }
+#endif
 
           mainTooLateCnt_ = 0;
           avgMainTooLateTime_usec_ = 0;

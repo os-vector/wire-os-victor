@@ -28,6 +28,7 @@
 
 // For getting our ip address
 #include <arpa/inet.h>
+#include <ctype.h>
 #include <ifaddrs.h>
 #include <linux/wireless.h>
 #include <netdb.h>
@@ -98,7 +99,7 @@ namespace {
   std::mutex _cpuTimeStatsMutex;
 
   const char* kNominalCPUFreqFile = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq";
-  const char* kCPUFreqFile        = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_cur_freq";
+  __attribute__((unused)) const char* kCPUFreqFile = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_cur_freq"; // unused under STANDALONE_SIM (fake CPU freq)
   const char* kCPUFreqSetFile     = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed";
   const char* kCPUGovernorFile    = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor";
   const char* kTemperatureFile    = "/sys/devices/virtual/thermal/thermal_zone3/temp";
@@ -158,6 +159,21 @@ namespace {
 
 std::string GetProperty(const std::string& key)
 {
+#if defined(STANDALONE_SIM)
+  std::string envKey = key;
+  for(char& c : envKey)
+  {
+    c = (c == '.') ? '_' : static_cast<char>(::toupper(c));
+  }
+  if(const char* envVal = ::getenv(envKey.c_str()))
+  {
+    return std::string(envVal);
+  }
+  if(key == "anki.robot.name")     { return "Vector R2D2"; }
+  if(key == "ro.anki.product.name"){ return "Vector"; }
+  if(key == "ro.build.display.id") { return "qemu"; }
+  return std::string();
+#else
   char propBuf[PROPERTY_VALUE_MAX] = {0};
   int rc = property_get(key.c_str(), propBuf, "");
   if(rc <= 0)
@@ -168,6 +184,7 @@ std::string GetProperty(const std::string& key)
   }
 
   return std::string(propBuf);
+#endif
 }
 
 OSState::OSState()
@@ -277,6 +294,9 @@ void OSState::UpdateCPUFreq_kHz() const
 {
   // Update cpu freq
   std::lock_guard<std::mutex> lock(_cpuMutex);
+#ifdef STANDALONE_SIM
+  _cpuFreq_kHz = 1267200;
+#else
   _cpuFile.open(kCPUFreqFile, std::ifstream::in);
   if (_cpuFile.is_open()) {
     _cpuFile >> _cpuFreq_kHz;
@@ -285,6 +305,7 @@ void OSState::UpdateCPUFreq_kHz() const
   else {
     LOG_ERROR("OSState.UpdateCPUFreq_kHz.FailedToOpenCPUFreqFile", "%s", kCPUFreqFile);
   }
+#endif
 }
 
 void OSState::SetDesiredCPUFrequency(DesiredCPUFrequency freq)
@@ -339,6 +360,10 @@ void OSState::UpdateTemperature_C() const
 {
   // Update temperature reading
   std::lock_guard<std::mutex> lock(_temperatureMutex);
+#ifdef STANDALONE_SIM
+  _cpuTemp_C = kFakeCpuTemperature_degC;
+  return;
+#endif
   _temperatureFile.open(kTemperatureFile, std::ifstream::in);
   if (_temperatureFile.is_open()) {
     _temperatureFile >> _cpuTemp_C;

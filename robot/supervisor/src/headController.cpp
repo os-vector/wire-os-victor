@@ -42,11 +42,12 @@ namespace HeadController {
 
       const f32 SPEED_FILTERING_COEFF = 0.5f;
 
-#ifdef SIMULATOR
+#if defined(SIMULATOR) || defined(STANDALONE_SIM)
       f32 Kp_ = 20.f; // proportional control constant
       f32 Kd_ = 0.f;  // derivative control constant
-      f32 Ki_ = 0.1f; // integral control constant
+      f32 Ki_ = 0.f;  // integral control constant
       f32 MAX_ERROR_SUM = 2.f;
+      const f32 ENCODER_ANGLE_RES = DEG_TO_RAD_F32(0.35f);
 #else
       f32 Kp_ = 4.f;  // proportional control constant
       f32 Kd_ = 4000.f;  // derivative control constant
@@ -620,6 +621,12 @@ namespace HeadController {
 
         // Compute current angle error
         angleError_ = currDesiredAngle_ - currentAngle_.ToFloat();
+
+#if defined(SIMULATOR) || defined(STANDALONE_SIM)
+        if (ABS(angleError_) < ENCODER_ANGLE_RES) {
+          angleError_ = 0.f;
+        }
+#endif
 
         // Compute power value
         power_ = (Kp_ * angleError_) + (Kd_ * (angleError_ - prevAngleError_) * CONTROL_DT) + (Ki_ * angleErrorSum_);

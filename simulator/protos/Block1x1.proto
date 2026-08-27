@@ -1,4 +1,4 @@
-#VRML_SIM V7.3.0 utf8
+#VRML_SIM R2021b utf8
 
 PROTO Block1x1 [
   field SFBool filterLogs FALSE
@@ -22,9 +22,17 @@ PROTO Block1x1 [
   field SFString markerImg_right ""
   field SFString markerImg_top   ""
   field SFString markerImg_bottom ""
+
+  field SFColor led0Color 0 0 0
+  field SFColor led1Color 0 0 0
+  field SFColor led2Color 0 0 0
+  field SFColor led3Color 0 0 0
+
+  field SFString controller "webotsCtrlLightCube"
 ]
 {
-Supervisor {
+Robot {
+  supervisor TRUE
 
   # Set some dimensions
   %{
@@ -35,7 +43,7 @@ Supervisor {
   }%
 
   %{ if fields.active.value then }%
-    controller "webotsCtrlLightCube"
+    controller IS controller
 
     # append optional command line parameters
     %{ ctrlArgs="" }%
@@ -217,6 +225,7 @@ Supervisor {
       	      appearance Appearance {
                 material Material {
                   diffuseColor 0.3 0.3 0.3
+                  emissiveColor IS %{= led_name .. "Color" }%
                 }
               }
               geometry Box {

@@ -164,6 +164,14 @@ void RobotToEngineImplMessaging::InitRobotMessageComponent(RobotInterface::Messa
                                                        // Forward to switchboard
                                                        LOG_INFO("RobotMessageHandler.ProcessMessage.EnterPairing","");
                                                        robot->Broadcast(ExternalInterface::MessageEngineToGame(SwitchboardInterface::EnterPairing()));
+#ifdef STANDALONE_SIM
+                                                       // fake
+                                                       {
+                                                         SwitchboardInterface::SetConnectionStatus status;
+                                                         status.status = SwitchboardInterface::ConnectionStatus::SHOW_PRE_PIN;
+                                                         robot->GetExternalInterface()->Broadcast(ExternalInterface::MessageGameToEngine(std::move(status)));
+                                                       }
+#endif
                                                      }));
 
   GetSignalHandles().push_back(messageHandler->Subscribe(RobotInterface::RobotToEngineTag::exitPairing,

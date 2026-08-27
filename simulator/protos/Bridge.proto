@@ -1,4 +1,4 @@
-#VRML_SIM V7.3.0 utf8
+#VRML_SIM R2021b utf8
 
 PROTO Bridge [
   field SFString name "Bridge"

@@ -77,7 +77,7 @@ namespace Anki {
       
       // Amount by which theoretical wheel velocities are scaled
       // to compensate for tread slip.
-#ifdef SIMULATOR
+#if defined(SIMULATOR) || defined(STANDALONE_SIM)
       const f32 POINT_TURN_SLIP_COMP_FACTOR = 1.f;
 #else
       const f32 POINT_TURN_SLIP_COMP_FACTOR = 1.5f;
@@ -93,7 +93,7 @@ namespace Anki {
       f32 pointTurnSpeedMaxIntegralError_ = 100;
       
       f32 pointTurnKp_ = 450.f;
-#ifdef SIMULATOR
+#if defined(SIMULATOR) || defined(STANDALONE_SIM)
       f32 pointTurnKd_ = 500.f; // Too high a derivative gain causes issues in sim
 #else
       f32 pointTurnKd_ = 4000.f;

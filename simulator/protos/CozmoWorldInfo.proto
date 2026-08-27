@@ -1,4 +1,4 @@
-#VRML_SIM V8.0.5 utf8
+#VRML_SIM R2021b utf8
 PROTO CozmoWorldInfo [
   field SFString title ""
   field MFString info [ "Cozmo generic world. All rights reserved. Copyright (c) Anki, Inc."
@@ -8,13 +8,16 @@ PROTO CozmoWorldInfo [
 					  ]
 
   field SFFloat basicTimeStep 5
+
+  field SFString physicsPlugin "cozmo_physics"
 ]
 {
 WorldInfo {
   title IS title
   info IS info
-  gravity 0 0 -9.81
-  physics "cozmo_physics"
+  # R2021b: gravity is a scalar magnitude along -Z (was the vector 0 0 -9.81)
+  gravity 9.81
+  physics IS physicsPlugin
   basicTimeStep IS basicTimeStep
   contactProperties [
     DEF FLOOR_FRONTWHEEL ContactProperties {
@@ -24,6 +27,9 @@ WorldInfo {
         20
       ]
       bounce 0
+      bumpSound ""
+      rollSound ""
+      slideSound ""
     }
     DEF RAMP_FRONTWHEEL ContactProperties {
       material1 "cmat_ramp"
@@ -32,6 +38,9 @@ WorldInfo {
         20
       ]
       bounce 0
+      bumpSound ""
+      rollSound ""
+      slideSound ""
     }
     DEF BLOCK_FRONTWHEEL ContactProperties {
       material1 "cmat_block"
@@ -40,6 +49,9 @@ WorldInfo {
         20
       ]
       bounce 0
+      bumpSound ""
+      rollSound ""
+      slideSound ""
     }
     DEF BLOCK_REARWHEEL ContactProperties {
       material1 "cmat_block"
@@ -48,6 +60,9 @@ WorldInfo {
         0.0001
       ]
       bounce 0
+      bumpSound ""
+      rollSound ""
+      slideSound ""
     }
     DEF FLOOR_REARWHEEL ContactProperties {
       material1 "cmat_floor"
@@ -56,6 +71,9 @@ WorldInfo {
         0.0001
       ]
       bounce 0
+      bumpSound ""
+      rollSound ""
+      slideSound ""
     }
     DEF RAMP_REARWHEEL ContactProperties {
       material1 "cmat_ramp"
@@ -64,6 +82,9 @@ WorldInfo {
         5
       ]
       bounce 0
+      bumpSound ""
+      rollSound ""
+      slideSound ""
     }
     DEF FLOOR_BLOCK ContactProperties {
       material1 "cmat_floor"
@@ -72,6 +93,9 @@ WorldInfo {
         3
       ]
       bounce 0
+      bumpSound ""
+      rollSound ""
+      slideSound ""
       softCFM 0.007
     }
     DEF BLOCK_BLOCK ContactProperties {
@@ -81,6 +105,9 @@ WorldInfo {
         10
       ]
       bounce 0
+      bumpSound ""
+      rollSound ""
+      slideSound ""
       softCFM 0.007
     }
     DEF RAMP_BLOCK ContactProperties {
@@ -90,6 +117,9 @@ WorldInfo {
         10
       ]
       bounce 0
+      bumpSound ""
+      rollSound ""
+      slideSound ""
     }
     DEF RAMP_RAMP ContactProperties {
       material1 "cmat_ramp"
@@ -98,6 +128,9 @@ WorldInfo {
         5000
       ]
       bounce 0
+      bumpSound ""
+      rollSound ""
+      slideSound ""
     }
     DEF FLOOR_RAMP ContactProperties {
       material1 "cmat_ramp"
@@ -106,6 +139,9 @@ WorldInfo {
         5000
       ]
       bounce 0
+      bumpSound ""
+      rollSound ""
+      slideSound ""
     }
     DEF LIFT_BLOCK ContactProperties {
       material1 "cmat_lift"
@@ -114,6 +150,9 @@ WorldInfo {
         1
       ]
       bounce 0
+      bumpSound ""
+      rollSound ""
+      slideSound ""
       softCFM 0.05
     }
     DEF LIFT_SOLIDBOX ContactProperties {
@@ -123,6 +162,9 @@ WorldInfo {
         1
       ]
       bounce 0
+      bumpSound ""
+      rollSound ""
+      slideSound ""
       softCFM 0.1
     }
     DEF CHARGER_TRACK ContactProperties {
@@ -132,6 +174,9 @@ WorldInfo {
         .5
       ]
       bounce 0
+      bumpSound ""
+      rollSound ""
+      slideSound ""
     }
   ]
 } 

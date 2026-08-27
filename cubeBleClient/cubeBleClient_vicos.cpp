@@ -13,8 +13,12 @@
 
 #include "cubeBleClient.h"
 
+#ifdef STANDALONE_SIM
+#include "simCubeClient/simCubeClient.h"
+#else
 #include "anki-ble/common/anki_ble_uuids.h"
 #include "bleClient/bleClient.h"
+#endif
 
 #include "clad/externalInterface/messageCubeToEngine.h"
 #include "clad/externalInterface/messageEngineToCube.h"
@@ -38,9 +42,14 @@ namespace Vector {
 
 namespace {
   
+#ifdef STANDALONE_SIM
+  using CubeTransport = SimCubeClient;
+#else
+  using CubeTransport = BleClient;
   struct ev_loop* _loop = nullptr;
-  
-  std::unique_ptr<BleClient> _bleClient = nullptr;
+#endif
+
+  std::unique_ptr<CubeTransport> _bleClient = nullptr;
   
   // For detecting connection state changes
   bool _wasConnectedToCube = false;
@@ -81,9 +90,13 @@ namespace {
   
 CubeBleClient::CubeBleClient()
 {
+#ifdef STANDALONE_SIM
+  _bleClient = std::make_unique<SimCubeClient>();
+#else
   _loop = ev_default_loop(EVBACKEND_SELECT);
   _bleClient = std::make_unique<BleClient>(_loop);
-  
+#endif
+
   _bleClient->RegisterAdvertisementCallback([](const std::string& addr, const int rssi) {
     std::lock_guard<std::mutex> lock(_cubeAdvertisementBuffer_mutex);
     _cubeAdvertisementBuffer.emplace(addr, rssi);
@@ -104,8 +117,10 @@ CubeBleClient::CubeBleClient()
 CubeBleClient::~CubeBleClient()
 {
   _bleClient.reset();
+#ifndef STANDALONE_SIM
   ev_loop_destroy(_loop);
   _loop = nullptr;
+#endif
 }
 
 bool CubeBleClient::InitInternal()

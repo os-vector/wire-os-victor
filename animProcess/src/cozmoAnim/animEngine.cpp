@@ -191,22 +191,39 @@ Result AnimEngine::Update(const BaseStationTime_t currTime_nanosec)
   }
 #endif
 
-  BaseStationTimer::getInstance()->UpdateTime(currTime_nanosec);
+  BaseStationTime_t tick_ns = currTime_nanosec;
+#ifdef STANDALONE_SIM
+  {
+    static BaseStationTime_t simClockOffset_ns = 0;
+    static bool simClockAnchored = false;
+    const uint32_t bodyNow_ms = AnimProcessMessages::GetLastRobotStateTimestamp_ms();
+    if (bodyNow_ms > 0) {
+      const BaseStationTime_t bodyNow_ns = (BaseStationTime_t)bodyNow_ms * 1000000ull;
+      if (!simClockAnchored) {
+        simClockOffset_ns = currTime_nanosec - bodyNow_ns;
+        simClockAnchored = true;
+      }
+      tick_ns = bodyNow_ns + simClockOffset_ns;
+    }
+  }
+#endif
+
+  BaseStationTimer::getInstance()->UpdateTime(tick_ns);
 
   _context->GetWebService()->Update();
 
-  Result result = AnimProcessMessages::Update(currTime_nanosec);
+  Result result = AnimProcessMessages::Update(tick_ns);
   if (RESULT_OK != result) {
     LOG_WARNING("AnimEngine.Update", "Unable to process messages (result %d)", result);
     return result;
   }
 
-  OSState::getInstance()->Update(currTime_nanosec);
+  OSState::getInstance()->Update(tick_ns);
 
   _ttsComponent->Update();
 
   // Clear out sprites that have passed their cache time
-  _context->GetDataLoader()->GetSpriteCache()->Update(currTime_nanosec);
+  _context->GetDataLoader()->GetSpriteCache()->Update(tick_ns);
 
   // Update animations
   _streamingAnimationModifier->ApplyAlterationsBeforeUpdate(_animationStreamer.get());

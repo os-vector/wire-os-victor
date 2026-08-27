@@ -6,6 +6,16 @@
 #include <AK/Tools/Common/AkPlatformFuncs.h>
 #include <algorithm>
 #include <sched.h>
+#ifdef STANDALONE_SIM
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <cstring>
+#include <cerrno>
+#include <cstdlib>
+#include <cstdio>
+#include <chrono>
+#endif
 
 
 #define PA_DEFAULT_CHANNEL_MASK 3
@@ -105,6 +115,54 @@ AK_DECLARE_THREAD_ROUTINE(AlsaSinkAudioThread)
 
 	AK_INSTRUMENT_THREAD_START( "AlsaSinkAudioThread" );
 
+#ifdef STANDALONE_SIM
+	while (pAlsaSinkDevice->m_bThreadRun)
+	{
+		Anki::AudioEngine::PlugIns::AkAlsaSinkPluginTypes::AkSinkAudioSample_t
+			local[Anki::AudioEngine::PlugIns::AkAlsaSinkPluginTypes::kAkAlsaSinkBufferSize];
+		bool haveData = false;
+		{
+			std::lock_guard<std::mutex> lock(pAlsaSinkDevice->_sinkPluginBufferMutex);
+			const size_t ringSize = pAlsaSinkDevice->_sinkPluginBuffer.size();
+			if (ringSize > (size_t)pAlsaSinkDevice->m_simRingMax.load(std::memory_order_relaxed)) {
+				pAlsaSinkDevice->m_simRingMax.store((uint32_t)ringSize, std::memory_order_relaxed);
+			}
+			if (ringSize > 0)
+			{
+				memcpy(local, pAlsaSinkDevice->_sinkPluginBuffer.front(), sizeof(local));
+				pAlsaSinkDevice->_sinkPluginBuffer.pop_front();
+				haveData = true;
+			}
+		}
+		if (haveData)
+		{
+			pAlsaSinkDevice->m_simDrains.fetch_add(1, std::memory_order_relaxed);
+			size_t bytes = (size_t)pAlsaSinkDevice->m_uFrameSize
+			             * pAlsaSinkDevice->m_uOutNumChannels
+			             * sizeof(Anki::AudioEngine::PlugIns::AkAlsaSinkPluginTypes::AkSinkAudioSample_t);
+			if (bytes > sizeof(local)) { bytes = sizeof(local); }
+			const uint8_t* p = (const uint8_t*)local;
+			int writeCalls = 0;
+			while (bytes > 0 && pAlsaSinkDevice->m_bThreadRun && pAlsaSinkDevice->m_simAudioFd >= 0)
+			{
+				ssize_t written = write(pAlsaSinkDevice->m_simAudioFd, p, bytes);
+				if (written < 0) { if (errno == EINTR) { continue; } break; }
+				bytes -= (size_t)written; p += (size_t)written;
+				++writeCalls;
+			}
+			if (writeCalls > 1) { pAlsaSinkDevice->m_simBlockedWrites.fetch_add(1, std::memory_order_relaxed); }
+			pAlsaSinkDevice->m_pSinkPluginContext->SignalAudioThread();
+		}
+		else
+		{
+			pAlsaSinkDevice->m_simStarves.fetch_add(1, std::memory_order_relaxed);
+			pAlsaSinkDevice->m_pSinkPluginContext->SignalAudioThread();
+			usleep(1000);
+		}
+	}
+	pAlsaSinkDevice->m_bThreadRun = false;
+	AkExitThread(AK_RETURN_THREAD_OK);
+#else
 	while(pAlsaSinkDevice->m_bThreadRun)
 	{
 		snd_pcm_sframes_t frameAvail;
@@ -209,6 +267,7 @@ AK_DECLARE_THREAD_ROUTINE(AlsaSinkAudioThread)
 	}
 	pAlsaSinkDevice->m_bThreadRun = false;
 	AkExitThread(AK_RETURN_THREAD_OK);
+#endif // STANDALONE_SIM
 }
 
 // Initializes the ALSA
@@ -216,6 +275,29 @@ static AKRESULT alsa_stream_connect(void *in_puserdata)
 {
 	AkAlsaSink *  pAlsaSinkDevice = (AkAlsaSink *)in_puserdata;
 	int retValue;
+
+#ifdef STANDALONE_SIM
+	{
+		if (pAlsaSinkDevice->m_uOutNumChannels == 0) {
+			pAlsaSinkDevice->m_uOutNumChannels =
+				Anki::AudioEngine::PlugIns::AkAlsaSinkPluginTypes::kAkAlsaSinkChannelCount;
+		}
+		static const char* kSimFifoPath = "/tmp/vector_audio.fifo";
+		mkfifo(kSimFifoPath, 0666); // ok if it already exists (EEXIST)
+		pAlsaSinkDevice->m_simAudioFd = open(kSimFifoPath, O_RDWR | O_CLOEXEC);
+		if (pAlsaSinkDevice->m_simAudioFd < 0) {
+			AK_LOG_ERROR("%s: STANDALONE_SIM: could not open FIFO %s: %s",
+			             __func__, kSimFifoPath, strerror(errno));
+			return AK_Fail;
+		}
+		// keep it small. ~64 ms
+		fcntl(pAlsaSinkDevice->m_simAudioFd, F_SETPIPE_SZ, 4096);
+		AK_LOG_INFO("%s: STANDALONE_SIM: audio -> FIFO %s (play: aplay -f S16_LE -c1 -r %u %s)",
+		            __func__, kSimFifoPath, pAlsaSinkDevice->m_uSampleRate, kSimFifoPath);
+		return AK_Success;
+	}
+#endif
+
 
 	// Handle for the PCM device
 	snd_pcm_t *pPcmHandle;
@@ -851,6 +933,14 @@ AKRESULT AkAlsaSink::Term( AK::IAkPluginMemAlloc * in_pAllocator )
 		AKPLATFORM::AkCloseThread( &m_Alsathread );
 	}
 
+#ifdef STANDALONE_SIM
+	if (m_simAudioFd >= 0)
+	{
+		close(m_simAudioFd);
+		m_simAudioFd = -1;
+	}
+#endif
+
 	if(m_bIsPrimary == true && (m_bMasterMode == false))
 	{
     // TODO: Fix after updating to Wwise SDK 2017
@@ -915,7 +1005,12 @@ AKRESULT AkAlsaSink::Reset()
 {
 	AK_LOG_TRACE(__FUNCTION__);
 
-	if(m_pPcmHandle)
+#ifdef STANDALONE_SIM
+	const bool deviceReady = (m_simAudioFd >= 0);
+#else
+	const bool deviceReady = (m_pPcmHandle != NULL);
+#endif
+	if(deviceReady)
 	{
 		AK_LOG_INFO("Starting ALSA sink");
 		if(m_bThreadRun == false)
@@ -982,6 +1077,11 @@ void AkAlsaSink::Consume(
 		const AkReal32 fDelta = (in_gain.fNext - in_gain.fPrev) / (AkReal32) uNumFrames;
 
 		std::lock_guard<std::mutex> lock(_sinkPluginBufferMutex);
+#ifdef STANDALONE_SIM
+		if (_sinkPluginBuffer.size() >= _sinkPluginBuffer.capacity()) {
+			m_simEvictions.fetch_add(1, std::memory_order_relaxed); // push_back will drop the oldest queued period
+		}
+#endif
 		auto& latestAudioDest = _sinkPluginBuffer.push_back();
 		// Channels are in AK pipeline order (i.e. LFE at the end)
 		for (unsigned int i = 0; i < m_uOutNumChannels; i++)
@@ -1025,6 +1125,12 @@ void AkAlsaSink::OnFrameEnd()
 		// When no data has been produced (consume is not being called since SE is idle), produce silence to the RB
 		if (!m_bDataReady)
 		{
+#ifdef STANDALONE_SIM
+			if (_sinkPluginBuffer.size() >= _sinkPluginBuffer.capacity()) {
+				m_simEvictions.fetch_add(1, std::memory_order_relaxed);
+			}
+			m_simSilence.fetch_add(1, std::memory_order_relaxed);
+#endif
 			// Write zeros into buffer
 			auto& latestAudioDest = _sinkPluginBuffer.push_back();
 			AKPLATFORM::AkMemSet(latestAudioDest, 0, m_uFrameSize*sizeof(int16_t)*m_uOutNumChannels);

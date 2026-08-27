@@ -419,6 +419,12 @@ void MicDataProcessor::ProcessRawAudio(RobotTimeStamp_t timestamp,
     robotStatus,
     robotAngle);
 
+#ifdef STANDALONE_SIM
+  // assume in front of robot if sim
+  directionResult.winningDirection  = 0; // kFirstIndex == front
+  directionResult.selectedDirection = 0;
+#endif
+
   // Feed the samples to the beat detector. Optionally either use a raw single channel (the first quarter of the
   // un-interleaved audio block) or the processed audio block
   auto* audioSource = kBeatDetectorUseProcessedAudio ? nextSample.audioBlock.data() : audioChunk;

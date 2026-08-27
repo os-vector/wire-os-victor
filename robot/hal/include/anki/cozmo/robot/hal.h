@@ -270,6 +270,13 @@ enum {
 void SetLED(const LEDId led_id, const u32 color);
 void SetSystemLED(u32 color);
 
+#ifdef STANDALONE_SIM
+void EngageGripper();
+void DisengageGripper();
+bool IsGripperEngaged();
+bool SimBodyIsLive();
+#endif
+
 /************************************************************************
  * \section Power management
  */

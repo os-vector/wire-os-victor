@@ -22,8 +22,8 @@
 #include <fcntl.h>
 #include <errno.h>
 
-#ifndef SIMULATOR
-#error SIMULATOR should be defined by any target using emrHelper_mac.h
+#if !defined(SIMULATOR) && !defined(STANDALONE_SIM)
+#error SIMULATOR or STANDALONE_SIM should be defined by any target using emrHelper_mac.h
 #endif
 
 namespace Anki {
@@ -42,7 +42,7 @@ namespace Factory {
 
     static Factory::EMR* _emr = nullptr;
 
-    static Factory::EMR _fakeEMR = {0};
+    static Factory::EMR _fakeEMR = {};
 
     // Open the emr with the provided flags
     // Memory maps the EMR file and returns a pointer to it
@@ -91,6 +91,7 @@ namespace Factory {
   // Write data of size len into the EMR at offset
   // Ex: WriteEMR(offsetof(Factory::EMR, playpen)/sizeof(uint32_t), buf, sizeof(buf));
   //     to write buf in the playpen member of the EMR
+  __attribute__((unused))
   static void WriteEMR(size_t offset, void* data, size_t len)
   {
     // Attempt to read the EMR, will do nothing if it has already been read
@@ -99,6 +100,7 @@ namespace Factory {
     memcpy(_emr->data + offset, data, len);
   }
 
+  __attribute__((unused))
   static void WriteEMR(size_t offset, uint32_t data)
   {
     // Attempt to read the EMR, will do nothing if it has already been read
@@ -115,6 +117,7 @@ namespace Factory {
     return _emr;
   }
 
+__attribute__((unused))
 static void CreateFakeEMR()
 {
   FILE* f = fopen(kEMRFile, "w+");
@@ -159,7 +162,7 @@ static void CreateFakeEMR()
 }
 
 #define UNIT_TEST_WHISKEY Factory::ScopedWhiskey whiskeyEMR;
-#define UNIT_TEST_WHISKEY Factory::ScopedXray xrayEMR;
+#define UNIT_TEST_XRAY    Factory::ScopedXray xrayEMR;
 
 static inline bool IsWhiskey()
 {

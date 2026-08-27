@@ -50,7 +50,7 @@ func NewFileProvider(jwtPath, cloudDir string) (*fileProvider, error) {
 		cloudDir = robot.DefaultCloudDir
 	}
 
-	certCommonName, err := robot.CertCommonName(cloudDir)
+	certCommonName, err := certCommonNameOrDefault(cloudDir)
 	if err != nil {
 		return nil, err
 	}

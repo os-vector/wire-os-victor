@@ -1,0 +1,59 @@
+#VRML_SIM R2021b utf8
+CozmoWorldInfo {
+  physicsPlugin ""
+}
+Viewpoint {
+  orientation 0.6208795342296849 0.45347972083828847 0.6394253254002046 1.7034117545651464
+  position 1.0668445708052903 -0.37838607762566273 0.4982048520975187
+}
+Background {
+  skyColor [
+    0.4 0.7 1
+  ]
+}
+DirectionalLight {
+  ambientIntensity 0.5
+  direction 2 -2 -1
+  intensity 0.5
+}
+DirectionalLight {
+  ambientIntensity 0.5
+  direction -2 -2 -1
+  intensity 0.5
+}
+DirectionalLight {
+  ambientIntensity 0.5
+  direction 0 2 -1
+  intensity 0.5
+}
+CozmoMat {
+  xSize 0.75
+  ySize 0.75
+}
+LightCube {
+  translation 0.13375703761321137 -0.1297350000170671 0.021966166982244822
+  rotation 0.025377550022182224 1.8387983765514406e-06 -0.999677938113816 0.00014496209766480091
+  controller ""
+}
+VictorCharger {
+  translation -0.33971 -0.333847 1.22125e-15
+  rotation 0 0 1 -0.785395307179586
+}
+CozmoBot2 {
+  hidden rotation_22 0 1 0 5.960464477539063e-08
+  hidden rotation_23 0 1 0 4.436443821414044e-06
+  hidden rotation_25 0 1 0 4.563357451295939e-06
+  hidden position_25_0 -6.594295505084547e-08
+  translation -0.01313735773057859 0.00016357896673006175 0.00023956101098015353
+  rotation 0.01106294628665516 0.9667408119497465 -0.25551871502925794 0.0003337528075070482
+  headAngle -3.283786458940698e-07
+  liftAngle -0.003157465739542417
+  filterLogs TRUE
+  colorizeStderrOutput TRUE
+  controller "vicBodyBridge"
+  legacyProcessControllers FALSE
+}
+Face {
+  translation 0.567943 1.99793e-06 0.321576
+  rotation 0.1294279597735375 0.1294279597735375 -0.9831056944488314 -1.5878353071795859
+}

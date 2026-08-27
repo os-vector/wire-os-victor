@@ -126,6 +126,9 @@ static const INIT_SCRIPT display_on_scr_midas[] = {
 };
 
 static uint32_t get_vector_hw_version() {
+#ifdef STANDALONE_SIM
+  return 0;
+#endif
   int fd = -1;
   uint32_t emr_data[8]; // The emr header
 
@@ -220,6 +223,10 @@ static int lcd_spi_init()
 }
 
 static void lcd_spi_transfer(int cmd, int bytes, const void* data) {
+#ifdef STANDALONE_SIM
+  (void)cmd; (void)bytes; (void)data;
+  return;
+#else
   const uint8_t* tx_buf = data;
 
   gpio_set_value(DnC_PIN, cmd ? gpio_LOW : gpio_HIGH);
@@ -232,6 +239,7 @@ static void lcd_spi_transfer(int cmd, int bytes, const void* data) {
     bytes -= count;
     tx_buf += count;
   }
+#endif // STANDALONE_SIM
 }
 
 static void lcd_run_script(const INIT_SCRIPT* script)
@@ -349,7 +357,112 @@ void lcd_draw_frame2_santek(const uint16_t* frame, size_t size) {
    }
 }
 
+#ifdef STANDALONE_SIM
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <sys/stat.h>
+#include <string.h>
+#include "vic_face_protocol.h"
+
+static int s_faceListenFd = -1;
+static int s_faceConnFd   = -1;
+static uint32_t s_faceSeq = 0;
+
+static void lcd_sim_face_init(void) {
+  s_faceListenFd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
+  if (s_faceListenFd < 0) {
+    return;
+  }
+  struct sockaddr_un addr;
+  memset(&addr, 0, sizeof(addr));
+  addr.sun_family = AF_UNIX;
+  strncpy(addr.sun_path, VIC_BRIDGE_FACE_SOCK_PATH, sizeof(addr.sun_path) - 1);
+  unlink(VIC_BRIDGE_FACE_SOCK_PATH);
+  if (bind(s_faceListenFd, (struct sockaddr*)&addr, sizeof(addr)) < 0 ||
+      listen(s_faceListenFd, 1) < 0) {
+    close(s_faceListenFd);
+    s_faceListenFd = -1;
+    return;
+  }
+  chmod(VIC_BRIDGE_FACE_SOCK_PATH, 0777);
+  int fl = fcntl(s_faceListenFd, F_GETFL, 0);
+  if (fl >= 0) {
+    fcntl(s_faceListenFd, F_SETFL, fl | O_NONBLOCK);
+  }
+}
+
+static void lcd_sim_send_face(const uint16_t* frame, size_t size) {
+  static int inited = 0;
+  if (!inited) {
+    lcd_sim_face_init();
+    inited = 1;
+  }
+  if (s_faceListenFd < 0) {
+    return;
+  }
+  if (s_faceConnFd < 0) {
+    int fd = accept(s_faceListenFd, NULL, NULL);
+    if (fd < 0) {
+      return;
+    }
+    int sndbuf = 256 * 1024;
+    setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &sndbuf, sizeof(sndbuf));
+    int fl = fcntl(fd, F_GETFL, 0);
+    if (fl >= 0) {
+      fcntl(fd, F_SETFL, fl | O_NONBLOCK);
+    }
+    s_faceConnFd = fd;
+  }
+  const size_t npix = (size_t)VIC_FACE_NPIX;
+  if (frame == NULL || size < npix * sizeof(uint16_t)) {
+    return;
+  }
+  static VicFaceFrame ff;
+  ff.magic = VIC_FACE_MAGIC;
+  ff.version = VIC_FACE_VERSION;
+  ff.seq = s_faceSeq++;
+  ff.width = VIC_FACE_WIDTH;
+  ff.height = VIC_FACE_HEIGHT;
+  memcpy(ff.rgb565, frame, npix * sizeof(uint16_t));
+  ssize_t w = send(s_faceConnFd, &ff, sizeof(ff), MSG_NOSIGNAL | MSG_DONTWAIT);
+  if (w < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+    close(s_faceConnFd);
+    s_faceConnFd = -1;
+  }
+}
+
+static void lcd_sim_dump_frame(const uint16_t* frame, size_t size) {
+  const int w = LCD_FRAME_WIDTH_SANTEK; // 184
+  const int h = LCD_FRAME_HEIGHT_SANTEK; // 96
+  const size_t npix = (size_t)w * h;
+  if (frame == NULL || size < npix * sizeof(uint16_t)) {
+    return;
+  }
+  FILE* f = fopen("/tmp/vector_face.ppm.tmp", "wb");
+  if (f == NULL) {
+    return;
+  }
+  fprintf(f, "P6\n%d %d\n255\n", w, h);
+  for (size_t i = 0; i < npix; i++) {
+    const uint16_t px = frame[i];
+    const unsigned char rgb[3] = {
+      (unsigned char)(((px >> 11) & 0x1F) * 255 / 31), //R
+      (unsigned char)(((px >>  5) & 0x3F) * 255 / 63), //G
+      (unsigned char)(( px        & 0x1F) * 255 / 31), //B
+    };
+    fwrite(rgb, 1, sizeof(rgb), f);
+  }
+  fclose(f);
+  rename("/tmp/vector_face.ppm.tmp", "/tmp/vector_face.ppm");
+}
+#endif
+
 void lcd_draw_frame2(const uint16_t* frame, size_t size) {
+#ifdef STANDALONE_SIM
+  lcd_sim_dump_frame(frame, size);
+  lcd_sim_send_face(frame, size);
+  return;
+#endif
   if (LCD_DISPLAY_MAN != SANTEK) {
     lcd_draw_frame2_midas(frame, size);
   } else {
@@ -402,6 +515,14 @@ int lcd_set_brightness(int brightness)
 }
 
 int lcd_init(void) {
+
+#ifdef STANDALONE_SIM
+  isXray = false;
+  LCD_DISPLAY_MAN = lcd_display_version();
+  lcd_use_fb = FALSE;
+  lcd_fd = open("/dev/null", O_WRONLY);
+  return 0;
+#endif
 
   // define LCD manufacturer rather than read the EMR partition upon EVERY SINGLE LCD DRAW
   InitIsXray();

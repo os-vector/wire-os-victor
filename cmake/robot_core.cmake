@@ -14,15 +14,20 @@ if (VICOS)
       ${ROBOT_CORE_INCS}
     )
 
-    target_include_directories(${LIB} 
+    target_include_directories(${LIB}
       PRIVATE
       $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/robot/core/inc>
+      $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/simulator/bridge>
     )
 
     target_link_libraries(${LIB}
       PRIVATE
       gpio
     )
+
+    if (STANDALONE_SIM)
+      target_compile_options(${LIB} PRIVATE ${STANDALONE_SIM_NOWARN})
+    endif()
 
     set_target_properties(${LIB} PROPERTIES
       INTERFACE_INCLUDE_DIRECTORIES

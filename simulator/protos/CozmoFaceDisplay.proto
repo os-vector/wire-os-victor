@@ -10,17 +10,17 @@ PROTO CozmoFaceDisplay [
     children [
       Shape {
         appearance Appearance {
-          material DEF DarkGray Material {
-            diffuseColor 0.5 0.5 0.5
+          material DEF FaceBezel Material {
+            diffuseColor 0 0 0
           }
         }
         geometry DEF FACE_PLATE Box {
-          size  0.01 0.032 0.025 
+          size  0.0103 0.032 0.025
         }
       }
-    
+
       Transform {
-        translation 0.00451 0 0
+        translation 0.0047 0 0
         rotation 1 0 0 1.5708
         children [
           Display {
@@ -31,6 +31,10 @@ PROTO CozmoFaceDisplay [
               Shape {
                 appearance Appearance {
                   texture ImageTexture {
+                    filtering 0
+                  }
+                  material Material {
+                    diffuseColor 1 1 1
                   }
                 }
                 geometry Box {
