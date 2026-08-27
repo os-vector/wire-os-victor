@@ -156,6 +156,20 @@ vdeploy
 ```
 </details>
 
+## Simulator
+
+`wire-os-victor` can be run in WeBots. A mostly fully-featured Vector experience without needing a real robot to deploy to.
+
+This only works with a relatively beefy x86_64 Linux machine.
+
+To do this, follow the prereq instructions in "Bare Metal: x86_64 or arm64 Linux" in the above section, then run:
+
+```
+./sim.sh
+```
+
+That will eventually open up `mprocs`, a program for managing multiple processes. Press `q` in that terminal window to exit, and click "Close without saving" in WeBots if asked.
+
 ## Cleaning
 
 99% of the time, if you're working on a behavior or something, you don't need to clean any build directories. The CMakeLists are correctly setup to properly rebuild the code which needs to be rebuilt upon a file change.

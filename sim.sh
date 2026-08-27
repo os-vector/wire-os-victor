@@ -18,6 +18,11 @@ if [[ ! "$(uname -a)" == *"Linux"* ]]; then
 	exit 1
 fi
 
+if [[ ! "$(uname -a)" == *"x86_64"* ]]; then
+	echo "this only works on x86_64 right now"
+	exit 1
+fi
+
 echo "latest OS: $OS_LATEST"
 
 cd "$TOPLEVEL"
