@@ -24,6 +24,13 @@ function press(msg) {
   repeatTimer = setInterval(function() { send(msg); }, 200);
 }
 
+function fakeonboard() {
+  fetch("http://localhost:8888/consolefunccall", {
+    method: 'POST',
+    body: "func=Exit Onboarding - Mark Complete&args="
+  });
+}
+
 window.onload = function() {
   window.robotWindow = webots.window('vicPanel');
   window.robotWindow.setTitle('Vector Panel');
