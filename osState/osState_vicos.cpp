@@ -171,7 +171,7 @@ std::string GetProperty(const std::string& key)
   }
   if(key == "anki.robot.name")     { return "Vector R2D2"; }
   if(key == "ro.anki.product.name"){ return "Vector"; }
-  if(key == "ro.build.display.id") { return "qemu"; }
+  if(key == "ro.build.display.id") { return "WEBOTS"; }
   return std::string();
 #else
   char propBuf[PROPERTY_VALUE_MAX] = {0};
@@ -667,6 +667,9 @@ const std::string& OSState::GetIPAddress(bool update)
   if(_ipAddress.empty() || update)
   {
     _ipAddress = GetIPV4AddressForInterface(kWifiInterfaceName);
+    #if defined(STANDALONE_SIM)
+      _ipAddress = "UR PC IP";
+    #endif
   }
 
   return _ipAddress;
@@ -679,19 +682,27 @@ const std::string& OSState::GetSSID(bool update)
     _ssid = GetWiFiSSIDForInterface(kWifiInterfaceName);
   }
 
+  #if defined(STANDALONE_SIM)
+    _ssid = "AnkiNetwork";
+  #endif
+
   return _ssid;
 }
 
 bool OSState::IsValidIPAddress(const std::string& ip) const
 {
-  struct sockaddr_in sa;
-  const int result = inet_pton(AF_INET, ip.c_str(), &(sa.sin_addr));
-  if(result != 0)
-  {
-    const bool isLinkLocalIP = (ip.length() > 7) && ip.compare(0,7,"169.254") == 0;
-    return !isLinkLocalIP;
-  }
-  return false;
+  #if defined(STANDALONE_SIM)
+    return true;
+  #else
+    struct sockaddr_in sa;
+    const int result = inet_pton(AF_INET, ip.c_str(), &(sa.sin_addr));
+    if(result != 0)
+    {
+      const bool isLinkLocalIP = (ip.length() > 7) && ip.compare(0,7,"169.254") == 0;
+      return !isLinkLocalIP;
+    }
+    return false;
+  #endif
 }
 
 std::string OSState::GetMACAddress() const

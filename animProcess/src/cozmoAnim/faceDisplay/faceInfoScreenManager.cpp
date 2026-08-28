@@ -1297,6 +1297,10 @@ void FaceInfoScreenManager::DrawMain()
   std::transform(esn.begin(), esn.end(), esn.begin(),
     [](unsigned char c){ return std::tolower(c); });
 
+  #ifdef STANDALONE_SIM
+    esn = "NO ESN!";
+  #endif
+
   const std::string serialNo = "ESN: "  + esn;
 
   const std::string hwVer    = "HW: "   + std::to_string(IsXray() ? 8 : Factory::GetEMR()->fields.HW_VER);
