@@ -150,7 +150,7 @@ if [[ $COZMO == "1" ]]; then
 	fi
 fi
 
-sleep 5
+sleep 1
 
 sudo OSPATH="$OSPATH" \
 	DISPLAY="$DISPLAY" \

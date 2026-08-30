@@ -18,8 +18,11 @@ namespace Vector {
 
   inline bool IsCozmoBody()
   {
-    const char* s = getenv("IS_COZMO");
-    return s && s[0] == '1';
+    static const bool isCozmo = [] {
+      const char* s = getenv("IS_COZMO");
+      return s && s[0] == '1';
+    }();
+    return isCozmo;
   }
 
   /***************************************************************************

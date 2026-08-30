@@ -5,6 +5,7 @@
 #include "cozmo_camera.h"
 
 #include <math.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -65,6 +66,13 @@ static const uint16_t kProxFarMM = 1200;
 static const uint8_t  kProxStatusValid = 0x58;
 
 #define VSOCK_OK(s) ((s) != VICNET_INVALID_SOCK)
+
+static volatile sig_atomic_t gStop = 0;
+
+static void OnStopSignal(int)
+{
+  gStop = 1;
+}
 
 static const int kCamOutW = kCozmoCamWidth * 2;
 static const int kCamOutH = kCozmoCamHeight * 2;
@@ -204,6 +212,10 @@ int main(int argc, char** argv)
     }
   }
 
+  signal(SIGINT, OnStopSignal);
+  signal(SIGTERM, OnStopSignal);
+  signal(SIGHUP, OnStopSignal);
+
   if (connProbe) {
     Robot probe;
     probe.SetVerbose(false);
@@ -216,9 +228,10 @@ int main(int argc, char** argv)
     }
     const double deadline = WallNow() + 60.0;
     double lastTry = WallNow();
-    while (WallNow() < deadline) {
+    while (!gStop && WallNow() < deadline) {
       probe.Update();
       if (probe.GetLink().GetState() == Link::kConnected) {
+        probe.Close();
         printf("robot connected\n");
         return 0;
       }
@@ -229,6 +242,7 @@ int main(int argc, char** argv)
       }
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
+    probe.Close();
     printf("robot never connected\n");
     return 1;
   }
@@ -349,7 +363,7 @@ int main(int argc, char** argv)
 
   double nextTick = WallNow();
 
-  for (;;) {
+  while (!gStop) {
     nextTick += kTickSec;
 
     if (!VSOCK_OK(sock)) {
