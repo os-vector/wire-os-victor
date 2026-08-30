@@ -172,10 +172,12 @@ func mainGateway() {
 	engineProtoManager.Init()
 	defer engineProtoManager.Close()
 
-	if IsOnRobot {
+	if hasSwitchboard {
 		switchboardManager.Init()
 		defer switchboardManager.Close()
+	}
 
+	if IsOnRobot {
 		tokenManager.Init()
 		defer tokenManager.Close()
 	}
@@ -272,8 +274,10 @@ func mainGateway() {
 
 	go engineCladManager.ProcessMessages()
 	go engineProtoManager.ProcessMessages()
-	if IsOnRobot {
+	if hasSwitchboard {
 		go switchboardManager.ProcessMessages()
+	}
+	if IsOnRobot {
 		go tokenManager.StartUpdateListener()
 	}
 

@@ -89,6 +89,11 @@ namespace {
   const float kNoRobotStateDisconnectTimeout_sec = 2.f;
   float _pendingRobotDisconnectTime_sec = -1.f;
 
+#ifdef STANDALONE_SIM
+  // latest RobotState timestamp  = the body's sim/body clock
+  uint32_t _lastRobotStateTimestamp_ms = 0;
+#endif
+
   // Whether or not engine has finished loading and is ready to do things
   bool _engineLoaded = false;
 
@@ -203,6 +208,13 @@ uint32_t AnimProcessMessages::_messageCountAnimToRobot = 0;
 uint32_t AnimProcessMessages::_messageCountAnimToEngine = 0;
 uint32_t AnimProcessMessages::_messageCountRobotToAnim = 0;
 uint32_t AnimProcessMessages::_messageCountEngineToAnim = 0;
+
+#ifdef STANDALONE_SIM
+uint32_t AnimProcessMessages::GetLastRobotStateTimestamp_ms()
+{
+  return _lastRobotStateTimestamp_ms;
+}
+#endif
 
 
 // ========== START OF PROCESSING MESSAGES FROM ENGINE ==========
@@ -733,6 +745,10 @@ static void ProcessMicDataMessage(const RobotInterface::MicData& payload)
 static void HandleRobotStateUpdate(const Anki::Vector::RobotState& robotState)
 {
   _pendingRobotDisconnectTime_sec = BaseStationTimer::getInstance()->GetCurrentTimeInSeconds() + kNoRobotStateDisconnectTimeout_sec;
+
+#ifdef STANDALONE_SIM
+  _lastRobotStateTimestamp_ms = robotState.timestamp;
+#endif
 
   FaceInfoScreenManager::getInstance()->Update(robotState);
 

@@ -24,7 +24,7 @@
 #error "This logging file may only be included in vic-robot"
 #endif
 
-#if defined(VICOS)
+#if defined(VICOS) && !defined(STANDALONE_SIM)
 
 #include <android/log.h>
 #define console_printf(fmt, ...) __android_log_print(ANDROID_LOG_INFO, "vic-robot", fmt, ##__VA_ARGS__)

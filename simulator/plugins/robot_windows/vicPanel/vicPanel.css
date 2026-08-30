@@ -1,0 +1,4 @@
+#panel { font-size: 18px; }
+#panel button { min-width: 4.5em; min-height: 2.4em; font-size: 18px; }
+#panel td { padding: 6px 10px; }
+#panel input[type=checkbox] { width: 18px; height: 18px; }

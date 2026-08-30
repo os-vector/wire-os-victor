@@ -27,6 +27,10 @@
 #include <thread>
 #include <mutex>
 
+#ifdef STANDALONE_SIM
+#include "sim_body_bridge.h"
+#endif
+
 namespace Anki {
 namespace Vector {
 
@@ -85,6 +89,9 @@ bool PopIMU(HAL::IMU_DataStructure& data)
 
 void ProcessIMUEvents()
 {
+#ifdef STANDALONE_SIM
+  return;
+#else
   static u8 tempCount = 0;
   if(tempCount++ >= IMU_TEMP_UPDATE_FREQ_TICKS)
   {
@@ -118,10 +125,14 @@ void ProcessIMUEvents()
     imuData.temperature_degC = IMU_TEMP_RAW_TO_C(rawData[i].temperature);
     PushIMU(imuData);
   }
+#endif // STANDALONE_SIM
 }
 
 bool OpenIMU()
 {
+#ifdef STANDALONE_SIM
+  return true;
+#else
   const char* err = imu_open();
   if (err) {
     AnkiError("HAL.InitIMU.OpenFailed", "%s", err);
@@ -130,6 +141,7 @@ bool OpenIMU()
   }
   imu_init();
   return true;
+#endif // STANDALONE_SIM
 }
 
 #if PROCESS_IMU_ON_THREAD
@@ -185,6 +197,10 @@ void ProcessLoop()
 
 void InitIMU()
 {
+#ifdef STANDALONE_SIM
+  OpenIMU();
+  return;
+#endif
 
 #if PROCESS_IMU_ON_THREAD
   // Spin up the processing thread and detach it
@@ -211,7 +227,24 @@ void StopIMU()
 
 bool HAL::IMUReadData(HAL::IMU_DataStructure &imuData)
 {
-#if(0) // For faking IMU data
+#ifdef STANDALONE_SIM
+  if (SimBodyBridge::PopImu(imuData)) {
+    return true;
+  }
+  if (SimBodyBridge::IsConnected()) {
+    return false;
+  }
+  static TimeStamp_t lastIMURead = 0;
+  const TimeStamp_t now = HAL::GetTimeStamp();
+  if (now - lastIMURead < 5) {
+    return false;
+  }
+  lastIMURead = now;
+  imuData = {};
+  imuData.accel[2] = 9800.f;
+  imuData.temperature_degC = 25.f;
+  return true;
+#elif(0) // For faking IMU data
   while (PopIMU(imuData)) {}; // Just to pop queue
   static TimeStamp_t lastIMURead = 0;
   TimeStamp_t now = HAL::GetTimeStamp();

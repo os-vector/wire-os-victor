@@ -430,7 +430,13 @@ void BatteryComponent::UpdateOnChargerPlatform()
   if (IsOnChargerContacts()) {
     // If we're on the charger _contacts_, we are definitely on the charger _platform_
     onPlatform = true;
-  } else if (onPlatform) {
+  }
+#if defined(STANDALONE_SIM)
+  else {
+    onPlatform = false;
+  }
+#else
+  else if (onPlatform) {
     // Not on the charger contacts, but we still think we're on the charger platform.
     // Make a reasonable conjecture about our current OnChargerPlatform state.
 
@@ -464,6 +470,7 @@ void BatteryComponent::UpdateOnChargerPlatform()
       }
     }
   }
+#endif
 
   // Has OnChargerPlatform state changed?
   if (onPlatform != _isOnChargerPlatform) {

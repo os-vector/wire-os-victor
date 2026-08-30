@@ -15,6 +15,8 @@
 
 #include "engine/aiComponent/behaviorComponent/heldInPalmTracker.h"
 
+#include "anki/cozmo/shared/cozmoConfig.h"
+
 #include "coretech/common/engine/utils/timer.h"
 
 #include "engine/aiComponent/behaviorComponent/behaviorExternalInterface/beiRobotInfo.h"
@@ -57,7 +59,7 @@ namespace {
   // lift the robot high enough in the air that multiple cliffs are detected, whereas when the
   // robot is just pushed or dragged along the ground, or only slightly picked up, the cliff
   // sensors will still be covered, and therefore the robot is not about to be placed in a palm.
-  static const int kMinCliffsToConfirmHeldInPalmPickup = 3;
+  static const int kMinCliffsToConfirmHeldInPalmPickup = IsCozmoBody() ? 2 : 3;
   
   // Set a minimum time limit after all motors have stopped moving to confirm that the robot is
   // actually moving because it is being held, and not because of some InAir animation tricking the

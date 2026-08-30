@@ -1,3 +1,4 @@
+//go:build !vicos
 // +build !vicos
 
 package identity
@@ -30,4 +31,12 @@ func getTLSCert(cloudDir string) (credentials.TransportCredentials, error) {
 		Certificates: []tls.Certificate{cert},
 		RootCAs:      rootcerts.ServerCertPool(),
 	}), nil
+}
+
+func certCommonNameOrDefault(cloudDir string) (string, error) {
+	if cn, err := robot.CertCommonName(cloudDir); err == nil {
+		return cn, nil
+	}
+	esn, _ := robot.ReadESN()
+	return "vic:" + esn, nil
 }

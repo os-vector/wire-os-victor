@@ -78,6 +78,8 @@ namespace Anki {
       void SetDesiredHeightByDuration(f32 height_mm, f32 acc_start_frac, f32 acc_end_frac, f32 duration_seconds);
       
       f32 GetDesiredHeight();
+
+      void GetLastCommand(u32& seq, f32& heightMm, f32& speed, f32& accel, f32& duration);
       bool IsInPosition();
       
       // Whether or not the lift is moving.

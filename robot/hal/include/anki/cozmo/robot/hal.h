@@ -270,6 +270,25 @@ enum {
 void SetLED(const LEDId led_id, const u32 color);
 void SetSystemLED(u32 color);
 
+#ifdef STANDALONE_SIM
+void EngageGripper();
+void DisengageGripper();
+bool IsGripperEngaged();
+bool SimBodyIsLive();
+// Bit values must match VIC_SETPOINT_* in simulator/bridge/vic_bridge_protocol.h
+enum MotorSetpointFlags {
+  MOTOR_SETPOINT_HEAD = 0x1,
+  MOTOR_SETPOINT_LIFT = 0x2,
+  MOTOR_SETPOINT_WHEELS = 0x4
+};
+void SetMotorSetpoints(u8 valid);
+void SetHeadCommand(u32 seq, f32 angleRad, f32 speedRadPerSec,
+                    f32 accelRadPerSec2, f32 durationSec);
+void SetLiftCommand(u32 seq, f32 heightMm, f32 speedRadPerSec,
+                    f32 accelRadPerSec2, f32 durationSec);
+void SetWheelSetpoints(f32 leftMmps, f32 rightMmps);
+#endif
+
 /************************************************************************
  * \section Power management
  */

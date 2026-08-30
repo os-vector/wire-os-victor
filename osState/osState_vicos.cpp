@@ -28,6 +28,7 @@
 
 // For getting our ip address
 #include <arpa/inet.h>
+#include <ctype.h>
 #include <ifaddrs.h>
 #include <linux/wireless.h>
 #include <netdb.h>
@@ -98,7 +99,7 @@ namespace {
   std::mutex _cpuTimeStatsMutex;
 
   const char* kNominalCPUFreqFile = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq";
-  const char* kCPUFreqFile        = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_cur_freq";
+  __attribute__((unused)) const char* kCPUFreqFile = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_cur_freq"; // unused under STANDALONE_SIM (fake CPU freq)
   const char* kCPUFreqSetFile     = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed";
   const char* kCPUGovernorFile    = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor";
   const char* kTemperatureFile    = "/sys/devices/virtual/thermal/thermal_zone3/temp";
@@ -158,6 +159,21 @@ namespace {
 
 std::string GetProperty(const std::string& key)
 {
+#if defined(STANDALONE_SIM)
+  std::string envKey = key;
+  for(char& c : envKey)
+  {
+    c = (c == '.') ? '_' : static_cast<char>(::toupper(c));
+  }
+  if(const char* envVal = ::getenv(envKey.c_str()))
+  {
+    return std::string(envVal);
+  }
+  if(key == "anki.robot.name")     { return "Vector R2D2"; }
+  if(key == "ro.anki.product.name"){ return "Vector"; }
+  if(key == "ro.build.display.id") { return "QEMU"; }
+  return std::string();
+#else
   char propBuf[PROPERTY_VALUE_MAX] = {0};
   int rc = property_get(key.c_str(), propBuf, "");
   if(rc <= 0)
@@ -168,6 +184,7 @@ std::string GetProperty(const std::string& key)
   }
 
   return std::string(propBuf);
+#endif
 }
 
 OSState::OSState()
@@ -277,6 +294,9 @@ void OSState::UpdateCPUFreq_kHz() const
 {
   // Update cpu freq
   std::lock_guard<std::mutex> lock(_cpuMutex);
+#ifdef STANDALONE_SIM
+  _cpuFreq_kHz = 1267200;
+#else
   _cpuFile.open(kCPUFreqFile, std::ifstream::in);
   if (_cpuFile.is_open()) {
     _cpuFile >> _cpuFreq_kHz;
@@ -285,6 +305,7 @@ void OSState::UpdateCPUFreq_kHz() const
   else {
     LOG_ERROR("OSState.UpdateCPUFreq_kHz.FailedToOpenCPUFreqFile", "%s", kCPUFreqFile);
   }
+#endif
 }
 
 void OSState::SetDesiredCPUFrequency(DesiredCPUFrequency freq)
@@ -339,6 +360,10 @@ void OSState::UpdateTemperature_C() const
 {
   // Update temperature reading
   std::lock_guard<std::mutex> lock(_temperatureMutex);
+#ifdef STANDALONE_SIM
+  _cpuTemp_C = kFakeCpuTemperature_degC;
+  return;
+#endif
   _temperatureFile.open(kTemperatureFile, std::ifstream::in);
   if (_temperatureFile.is_open()) {
     _temperatureFile >> _cpuTemp_C;
@@ -642,6 +667,9 @@ const std::string& OSState::GetIPAddress(bool update)
   if(_ipAddress.empty() || update)
   {
     _ipAddress = GetIPV4AddressForInterface(kWifiInterfaceName);
+    #if defined(STANDALONE_SIM)
+      _ipAddress = "UR PC IP";
+    #endif
   }
 
   return _ipAddress;
@@ -654,19 +682,27 @@ const std::string& OSState::GetSSID(bool update)
     _ssid = GetWiFiSSIDForInterface(kWifiInterfaceName);
   }
 
+  #if defined(STANDALONE_SIM)
+    _ssid = "AnkiNetwork";
+  #endif
+
   return _ssid;
 }
 
 bool OSState::IsValidIPAddress(const std::string& ip) const
 {
-  struct sockaddr_in sa;
-  const int result = inet_pton(AF_INET, ip.c_str(), &(sa.sin_addr));
-  if(result != 0)
-  {
-    const bool isLinkLocalIP = (ip.length() > 7) && ip.compare(0,7,"169.254") == 0;
-    return !isLinkLocalIP;
-  }
-  return false;
+  #if defined(STANDALONE_SIM)
+    return true;
+  #else
+    struct sockaddr_in sa;
+    const int result = inet_pton(AF_INET, ip.c_str(), &(sa.sin_addr));
+    if(result != 0)
+    {
+      const bool isLinkLocalIP = (ip.length() > 7) && ip.compare(0,7,"169.254") == 0;
+      return !isLinkLocalIP;
+    }
+    return false;
+  #endif
 }
 
 std::string OSState::GetMACAddress() const

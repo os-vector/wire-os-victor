@@ -1,0 +1,38 @@
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <link href="vicPanel.css" rel="stylesheet">
+  <script src="vicPanel.js"></script>
+</head>
+
+<body>
+<div id="panel">
+  <table>
+    <tr><td>Head</td>
+        <td><button data-msg="head:1">&#9650;</button></td>
+        <td><button data-msg="head:-1">&#9660;</button></td></tr>
+    <tr><td>Lift</td>
+        <td><button data-msg="lift:1">&#9650;</button></td>
+        <td><button data-msg="lift:-1">&#9660;</button></td></tr>
+    <tr><td>Left wheel</td>
+        <td><button data-msg="lw:1">&#9650;</button></td>
+        <td><button data-msg="lw:-1">&#9660;</button></td></tr>
+    <tr><td>Right wheel</td>
+        <td><button data-msg="rw:1">&#9650;</button></td>
+        <td><button data-msg="rw:-1">&#9660;</button></td></tr>
+    <tr><td>Backpack</td>
+        <td colspan="2"><button id="btnPress" data-msg="btn:1">Press</button></td></tr>
+    <tr><td>Cube</td>
+        <td colspan="2"><button data-oneshot="tap:1">Tap</button></td></tr>
+    <tr><td>Onboarding</td>
+        <td colspan="2"><button onclick="fakeonboard()"">Fake Onboard</button></td></tr>
+    <tr><td>Petting</td>
+        <td colspan="2"><label><input type="checkbox" id="petBox"> is being pet</label></td></tr>
+    <tr><td>Charger</td>
+        <td colspan="2"><label><input type="checkbox" id="chgBox"> fake on charger</label></td></tr>
+  </table>
+</div>
+</body>
+
+</html>

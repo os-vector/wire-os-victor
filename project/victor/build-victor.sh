@@ -44,7 +44,7 @@ function usage() {
     echo "$SCRIPT_NAME [OPTIONS]"
     echo "  -h                      print this message"
     echo "  -v                      print verbose output"
-    echo "  -c [CONFIGURATION]      build configuration {Debug,Release}"
+    echo "  -c [CONFIGURATION]      build configuration {Debug,Release,Simulator}"
     echo "  -p [PLATFORM]           build target platform {mac,vicos}"
     echo "  -a                      append cmake platform argument {arg}"
     echo "  -g [GENERATOR]          CMake generator {Ninja,Xcode,Makefiles}"
@@ -200,6 +200,9 @@ case "${CONFIGURATION}" in
   [Rr][Ee][Ll][Ee][Aa][Ss][Ee])
     CONFIGURATION="Release"
     ;;
+  [Ss][Ii][Mm][Uu][Ll][Aa][Tt][Oo][Rr])
+    CONFIGURATION="Simulator"
+    ;;
   *)
     echo "${SCRIPT_NAME}: Unknown configuration '${CONFIGURATION}'"
     usage
@@ -273,6 +276,12 @@ if [ "${GENERATOR}" != "Ninja" ]; then
 fi
 : ${BUILD_DIR:="${TOPLEVEL}/_build/${PLATFORM}/${CONFIGURATION}${BUILD_SYSTEM_TAG}"}
 
+CMAKE_BUILD_TYPE="${CONFIGURATION}"
+if [ "${CONFIGURATION}" == "Simulator" ]; then
+    CMAKE_BUILD_TYPE="Release"
+    DEFINES="${DEFINES} -DSTANDALONE_SIM=ON"
+fi
+
 case ${GENERATOR} in
     "Ninja")
         PROJECT_FILE="build.ninja"
@@ -335,7 +344,7 @@ if [ $IGNORE_EXTERNAL_DEPENDENCIES -eq 0 ] || [ $CONFIGURE -eq 1 ] ; then
     mkdir -p "${GEN_SRC_DIR}"
 
     # Scan for BUILD.in files
-    METABUILD_INPUTS=`find . -name BUILD.in`
+    METABUILD_INPUTS=`find . -path "./.sim" -prune -o -name BUILD.in -print`
 fi
 
 # Set protobuf location
@@ -470,7 +479,7 @@ if [ $CONFIGURE -eq 1 ]; then
         -DANKI_UPX=${UPX_EXE} \
         -DANKI_PROTOC=${PROTOC_EXE} \
         -DANKI_GO_BIN_PATH=${GOBIN} \
-        -DCMAKE_BUILD_TYPE=${CONFIGURATION} \
+        -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
         -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} \
         -DPROTOBUF_HOME=${PROTOBUF_HOME} \
         -DANKI_BUILD_SHA=${ANKI_BUILD_SHA} \

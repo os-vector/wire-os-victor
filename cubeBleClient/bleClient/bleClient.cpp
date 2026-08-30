@@ -79,8 +79,10 @@ void BleClient::Start()
   // Create a thread which will run the ev_loop for server comms
   auto threadFunc = [this](){
     if (!Connect()) {
+#ifndef STANDALONE_SIM
       PRINT_NAMED_WARNING("BleClient.LoopThread.ConnectFailed",
                           "Unable to connect to ble server - will retry");
+#endif
     }
     
     // Start a connection check/retry timer to naively just always try to
@@ -404,8 +406,10 @@ void BleClient::ServerConnectionCheckTimerCallback(ev::timer& timer, int revents
     }
     // Immediately attempt to re-connect
     if (!Connect()) {
+#ifndef STANDALONE_SIM
       PRINT_NAMED_WARNING("BleClient.ServerConnectionCheckTimerCallback.ConnectFailed",
                           "Unable to connect to ble server - will retry");
+#endif
     }
   } else if (!wasConnected && isConnected) {
     PRINT_NAMED_INFO("BleClient.ServerConnectionCheckTimerCallback.ConnectedToServer",

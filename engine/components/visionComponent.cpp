@@ -2649,6 +2649,24 @@ namespace Vector {
   {
     if (msg.result == RobotConnectionResult::Success)
     {
+#ifdef STANDALONE_SIM
+      // fake calib
+      {
+        const f32 focalLength = IsCozmoBody() ? 280.f : 320.f;
+        auto calib = std::make_shared<Vision::CameraCalibration>(
+            DEFAULT_CAMERA_RESOLUTION_HEIGHT, DEFAULT_CAMERA_RESOLUTION_WIDTH,
+            focalLength, focalLength,
+            DEFAULT_CAMERA_RESOLUTION_WIDTH * 0.5f, DEFAULT_CAMERA_RESOLUTION_HEIGHT * 0.5f,
+            0.f);                  // skew
+        SetCameraCalibration(calib);
+        CameraFOVInfo fovMsg(calib->ComputeHorizontalFOV().ToFloat(),
+                             calib->ComputeVerticalFOV().ToFloat());
+        if (_robot->SendMessage(RobotInterface::EngineToRobot(std::move(fovMsg))) != RESULT_OK) {
+          LOG_WARNING("VisionComponent.SimCameraCalib.SendCameraFOVFailed", "");
+        }
+        Enable(true);
+      }
+#else
       NVStorageComponent::NVStorageReadCallback readCamCalibCallback = [this](u8* data, size_t size, NVStorage::NVResult res)
       {
         if (res == NVStorage::NVResult::NV_OKAY) {
@@ -2709,6 +2727,7 @@ namespace Vector {
       };
 
       _robot->GetNVStorageComponent().Read(NVStorage::NVEntryTag::NVEntry_CameraCalib, readCamCalibCallback);
+#endif // STANDALONE_SIM
 
     }
   }

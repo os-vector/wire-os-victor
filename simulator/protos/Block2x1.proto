@@ -1,4 +1,4 @@
-#VRML_SIM V7.3.0 utf8
+#VRML_SIM R2021b utf8
 
 PROTO Block2x1 [
   field SFString name "Block000"

@@ -34,19 +34,28 @@ namespace HeadController {
       Radians currentAngle_ = 0.f;
       Radians desiredAngle_ = 0.f;
       f32 currDesiredAngle_ = 0.f;
+      u32 cmdSeq_ = 0;
+      f32 cmdAngle_ = 0.f;
+      f32 cmdSpeed_ = 0.f;
+      f32 cmdAccel_ = 0.f;
+      f32 cmdDuration_ = 0.f;
       f32 angleError_ = 0.f;
       f32 angleErrorSum_ = 0.f;
       f32 prevAngleError_ = 0.f;
       f32 prevHalPos_ = 0.f;
+#ifdef STANDALONE_SIM
+      bool halPosSeeded_ = false;
+#endif
       bool inPosition_  = true;
 
       const f32 SPEED_FILTERING_COEFF = 0.5f;
 
-#ifdef SIMULATOR
+#if defined(SIMULATOR) || defined(STANDALONE_SIM)
       f32 Kp_ = 20.f; // proportional control constant
       f32 Kd_ = 0.f;  // derivative control constant
-      f32 Ki_ = 0.1f; // integral control constant
+      f32 Ki_ = 0.f;  // integral control constant
       f32 MAX_ERROR_SUM = 2.f;
+      const f32 ENCODER_ANGLE_RES = DEG_TO_RAD_F32(0.35f);
 #else
       f32 Kp_ = 4.f;  // proportional control constant
       f32 Kd_ = 4000.f;  // derivative control constant
@@ -102,7 +111,7 @@ namespace HeadController {
       u32 lastInPositionTime_ms_;
       const u32 IN_POSITION_TIME_MS = 200;
 
-      const f32 MAX_HEAD_CONSIDERED_STOPPED_RAD_PER_SEC = 0.001f;
+      const f32 MAX_HEAD_CONSIDERED_STOPPED_RAD_PER_SEC = IsCozmoBody() ? 0.05f : 0.001f;
 
       const u32 HEAD_STOP_TIME = 200;  // ms
 
@@ -189,8 +198,12 @@ namespace HeadController {
 
     void ResetLowAnglePosition()
     {
+#ifdef STANDALONE_SIM
+      currentAngle_ = HAL::MotorGetPosition(MotorID::MOTOR_HEAD);
+#else
       currentAngle_ = MIN_HEAD_ANGLE;
       HAL::MotorResetPosition(MotorID::MOTOR_HEAD);
+#endif
       prevHalPos_ = HAL::MotorGetPosition(MotorID::MOTOR_HEAD);
       isCalibrated_ = true;
     }
@@ -340,6 +353,15 @@ namespace HeadController {
       currentAngle_ = angle;
     }
 
+    void GetLastCommand(u32& seq, f32& angle, f32& speed, f32& accel, f32& duration)
+    {
+      seq = cmdSeq_;
+      angle = cmdAngle_;
+      speed = cmdSpeed_;
+      accel = cmdAccel_;
+      duration = cmdDuration_;
+    }
+
     f32 GetLastCommandedAngle()
     {
       return desiredAngle_.ToFloat();
@@ -468,6 +490,12 @@ namespace HeadController {
       lastInPositionTime_ms_ = 0;
       inPosition_ = false;
 
+      ++cmdSeq_;
+      cmdAngle_ = desiredAngle_.ToFloat();
+      cmdSpeed_ = maxSpeedRad_;
+      cmdAccel_ = accelRad_;
+      cmdDuration_ = duration_seconds;
+
       bool res = false;
       // Start profile of head trajectory
       if (duration_seconds > 0) {
@@ -541,6 +569,13 @@ namespace HeadController {
         return false;
       }
 
+#ifdef STANDALONE_SIM
+      if (IsMoving()) {
+        potentialBurnoutStartTime_ms_ = 0;
+        return false;
+      }
+#endif
+
       if (potentialBurnoutStartTime_ms_ == 0) {
         potentialBurnoutStartTime_ms_ = HAL::GetTimeStamp();
       } else if (HAL::GetTimeStamp() - potentialBurnoutStartTime_ms_ > BURNOUT_TIME_THRESH_MS) {
@@ -577,6 +612,14 @@ namespace HeadController {
 
     Result Update()
     {
+#ifdef STANDALONE_SIM
+      if (!halPosSeeded_ && HAL::SimBodyIsLive()) {
+        halPosSeeded_ = true;
+        prevHalPos_ = HAL::MotorGetPosition(MotorID::MOTOR_HEAD);
+        currentAngle_ = prevHalPos_;
+      }
+#endif
+
       CalibrationUpdate();
 
       PoseAndSpeedFilterUpdate();
@@ -620,6 +663,12 @@ namespace HeadController {
 
         // Compute current angle error
         angleError_ = currDesiredAngle_ - currentAngle_.ToFloat();
+
+#if defined(SIMULATOR) || defined(STANDALONE_SIM)
+        if (ABS(angleError_) < ENCODER_ANGLE_RES) {
+          angleError_ = 0.f;
+        }
+#endif
 
         // Compute power value
         power_ = (Kp_ * angleError_) + (Kd_ * (angleError_ - prevAngleError_) * CONTROL_DT) + (Ki_ * angleErrorSum_);

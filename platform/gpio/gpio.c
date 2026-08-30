@@ -97,6 +97,9 @@ static int open_patiently(const char *pathname, int flags)
 
 int gpio_get_base_offset()
 {
+#ifdef STANDALONE_SIM
+  return 0;
+#else
   if (GPIO_BASE_OFFSET < 0) {
     // gpio pinctrl for msm8909:
     // mainline/6.17:  /sys/devices/platform/soc@0/1000000.pinctrl/gpio/gpiochip512/base -> 512
@@ -138,6 +141,7 @@ int gpio_get_base_offset()
   }
 
   return GPIO_BASE_OFFSET;
+#endif // STANDALONE_SIM
 }
 
 static bool path_exists(const char* path) {
@@ -153,6 +157,15 @@ int gpio_create(int gpio_number, enum Gpio_Dir direction, enum Gpio_Level initia
       error_return(app_MEMORY_ERROR, "can't allocate memory for gpio %d\n", gpio_number);
    }
    (void) memset(gp, 0, sizeof(*gp));
+
+#ifdef STANDALONE_SIM
+   // we still have to Use these to prevent compiler error
+   gp->pin = gpio_number;
+   gp->isOpenDrain = false;
+   gp->fd = open("/dev/null", O_RDWR);
+   *gpPtr = gp;
+   return 0;
+#endif
 
    int pin_number = gpio_number + gpio_get_base_offset();
    char gpio_path[32] = {0};
@@ -215,6 +228,10 @@ int gpio_create_open_drain_output(int gpio_number, enum Gpio_Level initial_value
 void gpio_set_direction(GPIO gp, enum Gpio_Dir direction)
 {
   assert(gp != NULL);
+#ifdef STANDALONE_SIM
+  (void)direction;
+  return;
+#endif
    char ioname[40];
 //   printf("settting direction of %d  to %s\n", gp->pin, direction  ? "out": "in");
    snprintf(ioname, 40, "/sys/class/gpio/gpio%d/direction", gp->pin+gpio_get_base_offset());

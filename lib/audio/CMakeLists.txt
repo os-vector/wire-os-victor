@@ -216,6 +216,7 @@ target_include_directories(ak_alsa_sink
   $<BUILD_INTERFACE:${AKALSASINK_DIR}/common/src>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<BUILD_INTERFACE:${WWISE_SDK_ROOT}/include>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../simulator/bridge>
 )
 
 target_link_libraries(ak_alsa_sink

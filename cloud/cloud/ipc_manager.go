@@ -17,8 +17,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"math/rand"
-	"path"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -65,7 +65,9 @@ func (manager *IpcManager) Connect(path string, name string) {
 	for {
 		conn, err := ipc.NewUnixgramClient(path, name)
 		if err != nil {
-			log.Printf("Couldn't create sockets for %s & %s_%s - retrying: %s\n", path, path, name, err.Error())
+			if logSwitchboardConnectRetries || !strings.Contains(path, switchboardDomainSocket) {
+				log.Printf("Couldn't create sockets for %s & %s_%s - retrying: %s\n", path, path, name, err.Error())
+			}
 			time.Sleep(5 * time.Second)
 		} else {
 			manager.conn = conn
@@ -92,7 +94,7 @@ type EngineProtoIpcManager struct {
 // Init sets up the channel manager and the domain socket connection
 func (manager *EngineProtoIpcManager) Init() {
 	manager.managedChannels = make(map[string]([]chan extint.GatewayWrapper))
-	manager.Connect(path.Join(SocketPath, protoDomainSocket), "client")
+	manager.Connect(ipc.GetSocketPath(protoDomainSocket), "client")
 }
 
 // Write sends a Protobuf message to vic-engine. This will be handled by
@@ -286,7 +288,7 @@ type SwitchboardIpcManager struct {
 // Init sets up the channel manager and the domain socket connection
 func (manager *SwitchboardIpcManager) Init() {
 	manager.managedChannels = make(map[gw_clad.SwitchboardResponseTag]([]chan gw_clad.SwitchboardResponse))
-	manager.Connect(path.Join(SocketPath, switchboardDomainSocket), "client")
+	manager.Connect(ipc.GetSocketPath(switchboardDomainSocket), "client")
 }
 
 func (manager *SwitchboardIpcManager) handleSwitchboardMessages(msg *gw_clad.SwitchboardResponse) {
@@ -480,7 +482,7 @@ type EngineCladIpcManager struct {
 // Init sets up the channel manager and the domain socket connection
 func (manager *EngineCladIpcManager) Init() {
 	manager.managedChannels = make(map[gw_clad.MessageRobotToExternalTag]([]chan gw_clad.MessageRobotToExternal))
-	manager.Connect(path.Join(SocketPath, cladDomainSocket), "client")
+	manager.Connect(ipc.GetSocketPath(cladDomainSocket), "client")
 }
 
 // Write sends a CLAD message to vic-engine. This will be handled by

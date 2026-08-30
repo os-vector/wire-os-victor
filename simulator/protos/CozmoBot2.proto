@@ -1,4 +1,4 @@
-#VRML_SIM V7.3.0 utf8
+#VRML_SIM R2021b utf8
 PROTO CozmoBot2 [
   field SFString name "CozmoBot2"
   field SFInt32 robotID 0
@@ -50,13 +50,17 @@ PROTO CozmoBot2 [
   # Rates at which battery voltage changes while on/off the charger
   field SFFloat batteryChargeRate_voltsPerMin     0.09
   field SFFloat batteryDischargeRate_voltsPerMin -0.02
+
+  field SFBool legacyProcessControllers TRUE
 ]
 {
 
-Supervisor {
+Robot {
+  supervisor TRUE
   translation IS translation
   rotation IS rotation
   name IS name
+  window "vicPanel"
 
   %{ if not fields.vizMode.value then }%
 
@@ -267,7 +271,7 @@ Supervisor {
                     }
                   }
 
-                %{ if not fields.vizMode.value then }%
+                %{ if not fields.vizMode.value and fields.legacyProcessControllers.value then }%
 
                 # Anim process:
                 CozmoAnim {
@@ -295,7 +299,9 @@ Supervisor {
                 # Vic-gateway process:
                 Gateway {
                 }
+                %{ end }%  #legacyProcessControllers
 
+                %{ if not fields.vizMode.value then }%
                 # This IMU is positioned in the same place as the one in CozmoEngine2.proto
                 # as way to simulate access to the same IMU from both the robot and engine processes
                 # which we might in theory be able to eventually do via AndroidHAL.
@@ -303,6 +309,18 @@ Supervisor {
                   translation 0.0058 -0.0135 0
                 }
                 %{ end }%  #vizMode
+
+                CozmoFaceDisplay {
+                  translation 0.013 0 0
+                }
+
+                %{ if not fields.vizMode.value then }%
+                CozmoCamera {
+                  translation 0.01884 0 -0.00796
+                  rotation    0.563430001007340  -0.563430001007340  -0.604229482837223 2.054545429548061
+                  fieldOfView 1.5708
+                }
+                %{ end }%
 
                 DEF HEAD_SHAPE Group {
                   children [
@@ -704,6 +722,7 @@ Supervisor {
           device [
             LinearMotor {
               name "LeftWheelMotor"
+              sound ""
             }
             PositionSensor {
               name "LeftWheelMotorPosSensor"
@@ -744,6 +763,7 @@ Supervisor {
           device [
             LinearMotor {
               name "RightWheelMotor"
+              sound ""
             }
             PositionSensor {
               name "RightWheelMotorPosSensor"

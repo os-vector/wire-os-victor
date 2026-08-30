@@ -156,6 +156,60 @@ vdeploy
 ```
 </details>
 
+## Simulator
+
+`wire-os-victor` can be run in WeBots. A mostly fully-featured Vector experience without needing a real robot to deploy to.
+
+This only works with a relatively beefy x86_64 Linux machine.
+
+To do this: 
+
+1. Follow the prereq instructions in "Bare Metal: x86_64 or arm64 Linux" in the above section
+
+2. Install qemu-static-arm and libasound2-dev, make sure systemd-binfmt is set up to handle ARM programs
+
+```
+# Arch:
+sudo pacman -S qemu-user-static qemu-user-static-binfmt alsa-lib
+sudo systemctl enable --now systemd-binfmt.service
+# if already enabled
+sudo systemctl restart systemd-binfmt.service
+
+# Debian / Ubuntu:
+sudo apt install qemu-user-static qemu-user-binfmt libasound2-dev
+sudo systemctl restart systemd-binfmt.service
+
+# Fedora
+sudo dnf install qemu-user-static qemu-user-binfmt alsa-lib
+sudo systemctl restart systemd-binfmt.service
+```
+
+3. Run:
+
+```
+./sim.sh
+```
+
+That will eventually open up `mprocs`, a program for managing multiple processes. Press `q` in that terminal window to exit, and click "Close without saving" in WeBots if asked.
+
+## Cozmo
+
+You can run the victor processes on your computer and use Cozmo as the vessel.
+
+If you have a beefy x86_64 Linux machine with a Wi-Fi card, go for it!
+
+Follow the simulator instructions, but instead of `./sim.sh`, run:
+
+```
+./sim.sh -cozmo
+```
+
+Make sure you're connected to the internet while the script is running, as it downloads dependencies.
+
+If you have more than one network adapter, you can have one connected to the internet and one connected to Cozmo at the same time throughout the whole process.
+
+If you only have one, you can just run the script while connected to the internet, and it will tell you when you should change your network over to Cozmo. Also note that if you have run it once, you don't need the internet to run it a second time.
+
 ## Cleaning
 
 99% of the time, if you're working on a behavior or something, you don't need to clean any build directories. The CMakeLists are correctly setup to properly rebuild the code which needs to be rebuilt upon a file change.

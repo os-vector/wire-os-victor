@@ -51,3 +51,9 @@ target_include_directories(cubeBleClient
   ${PLATFORM_INCLUDES}
 )
 
+if (STANDALONE_SIM)
+  target_include_directories(cubeBleClient PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/simulator/bridge>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/robot/cube_firmware/app>)
+endif()
+

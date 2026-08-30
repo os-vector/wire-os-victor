@@ -952,8 +952,10 @@ bool JdocsManager::ConnectToJdocsServer()
   static const std::string sockName = std::string{JDOCS_ENGINE_CLIENT_PATH};
   static const std::string peerName = std::string{JDOCS_SERVER_PATH};
   const bool udpSuccess = _udpClient.Connect(sockName, peerName);
+#ifndef STANDALONE_SIM
   LOG_INFO("JdocsManager.ConnectToJdocsServer.Attempt", "Attempted connection from %s to %s: Result: %s",
            sockName.c_str(), peerName.c_str(), udpSuccess ? "SUCCESS" : "Failed");
+#endif
   return udpSuccess;
 }
 

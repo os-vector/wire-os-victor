@@ -63,6 +63,11 @@ public:
   // Dispatch message from robot
   static void ProcessMessageFromRobot(const RobotInterface::RobotToEngine& msg);
 
+#ifdef STANDALONE_SIM
+  // Used to slave the anim clock to sim-time
+  static uint32_t GetLastRobotStateTimestamp_ms();
+#endif
+
   static uint32_t GetMessageCountAtR() { return _messageCountAnimToRobot; }
   static uint32_t GetMessageCountAtE() { return _messageCountAnimToEngine; }
   static uint32_t GetMessageCountRtA() { return _messageCountRobotToAnim; }

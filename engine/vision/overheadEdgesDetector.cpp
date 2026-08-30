@@ -103,6 +103,15 @@ Result OverheadEdgesDetector::DetectHelper(const typename ImageTraitType::ImageT
 
   Anki::Rectangle<s32> bbox(groundInImage);
 
+  // fix an error if resolution is wrong and area is 0
+  if (bbox.Area() <= 0) {
+    OverheadEdgeFrame emptyFrame;
+    emptyFrame.timestamp = image.GetTimestamp();
+    emptyFrame.groundPlaneValid = false;
+    currentResult.overheadEdges.push_back(std::move(emptyFrame));
+    return RESULT_OK;
+  }
+
   // rsam: I tried to create a mask for the lift, calculating top and bottom sides of the lift and projecting
   // onto camera plane. Turns out that physical robots have a lot of slack in the lift, so this projection,
   // despite being correct on the paper, was not close to where the camera was seeing the lift.

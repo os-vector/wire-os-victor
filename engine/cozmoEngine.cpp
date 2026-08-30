@@ -470,6 +470,44 @@ Result CozmoEngine::Update(const BaseStationTime_t currTime_nanosec)
     case EngineState::Running:
     {
       // Update time
+#ifdef STANDALONE_SIM
+      Result result = _context->GetRobotManager()->UpdateRobotConnection();
+      if (RESULT_OK != result) {
+        LOG_ERROR("CozmoEngine.Update.Running", "Unable to update robot connection (result %d)", result);
+        return result;
+      }
+
+      // slave the engine clock to the body's sim-time rather than wall-clock
+      static BaseStationTime_t simClockOffset_ns = 0;
+      static bool simClockAnchored = false;
+      BaseStationTime_t engineTime_ns = currTime_nanosec;
+      TimeStamp_t bodyNow_ms = 0;
+      {
+        const Robot* robot = _context->GetRobotManager()->GetRobot();
+        bodyNow_ms = (robot != nullptr) ? (TimeStamp_t)robot->GetLastMsgTimestamp() : 0;
+        if (bodyNow_ms > 0) {
+          const BaseStationTime_t bodyNow_ns = (BaseStationTime_t)bodyNow_ms * 1000000ull;
+          if (!simClockAnchored) {
+            simClockOffset_ns = currTime_nanosec - bodyNow_ns;
+            simClockAnchored = true;
+          }
+          engineTime_ns = bodyNow_ns + simClockOffset_ns;
+        }
+      }
+
+      static TimeStamp_t lastFullTickBody_ms = 0;
+      if (simClockAnchored) {
+        if (bodyNow_ms - lastFullTickBody_ms < (TimeStamp_t)BS_TIME_STEP_MS) {
+          return RESULT_OK;
+        }
+        lastFullTickBody_ms = bodyNow_ms;
+      }
+
+      BaseStationTimer::getInstance()->UpdateTime(engineTime_ns);
+
+      // Update OSState
+      OSState::getInstance()->Update(engineTime_ns);
+#else
       BaseStationTimer::getInstance()->UpdateTime(currTime_nanosec);
 
       // Update OSState
@@ -480,6 +518,7 @@ Result CozmoEngine::Update(const BaseStationTime_t currTime_nanosec)
         LOG_ERROR("CozmoEngine.Update.Running", "Unable to update robot connection (result %d)", result);
         return result;
       }
+#endif
 
       // Let the robot manager do whatever it's gotta do to update the
       // robots in the world.

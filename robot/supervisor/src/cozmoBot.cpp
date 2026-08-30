@@ -96,6 +96,7 @@ namespace Anki {
         const u32 MAIN_TOO_LONG_TIME_THRESH_USEC = 4000;
         const u32 MAIN_CYCLE_ERROR_REPORTING_PERIOD_USEC = 1000000;
 
+#ifndef STANDALONE_SIM
         // If there are more than this many TooLates in a reporting period
         // a warning is issued
         const u32 MIN_TOO_LATE_COUNT_PER_REPORTING_PERIOD = 5;
@@ -111,6 +112,7 @@ namespace Anki {
         // If a single tick takes this long in a reporting period
         // a warning is issued
         const u32 INSTANT_WARNING_TOO_LONG_TIME_THRESH_USEC = 10000;
+#endif // !STANDALONE_SIM
 
         u32 lastOnChargerChangedTime_ms_ = 0;
 
@@ -570,8 +572,51 @@ namespace Anki {
         //////////////////////////////////////////////////////////////
 
         MARK_NEXT_TIME_PROFILE(CozmoBot, EYEHEADLIFT);
+#ifdef STANDALONE_SIM
+        {
+          static bool calibratedOnLiveBody = false;
+          if (!calibratedOnLiveBody && HAL::SimBodyIsLive()) {
+            calibratedOnLiveBody = true;
+            const bool autoStarted = true;
+            LiftController::StartCalibrationRoutine(autoStarted, MotorCalibrationReason::Startup);
+            HeadController::StartCalibrationRoutine(autoStarted, MotorCalibrationReason::Startup);
+          }
+        }
+#endif
         HeadController::Update();
         LiftController::Update();
+
+#ifdef STANDALONE_SIM
+        {
+          u8 valid = 0;
+          if (HeadController::IsCalibrated() && !HeadController::IsCalibrating()) {
+            valid |= HAL::MOTOR_SETPOINT_HEAD;
+          }
+          if (LiftController::IsCalibrated() && !LiftController::IsCalibrating()) {
+            valid |= HAL::MOTOR_SETPOINT_LIFT;
+          }
+          valid |= HAL::MOTOR_SETPOINT_WHEELS;
+          if (IsCozmoBody()) {
+            u32 seq = 0;
+            f32 angle = 0.f;
+            f32 speed = 0.f;
+            f32 accel = 0.f;
+            f32 duration = 0.f;
+            HeadController::GetLastCommand(seq, angle, speed, accel, duration);
+            HAL::SetHeadCommand(seq, angle, speed, accel, duration);
+          }
+          if (IsCozmoBody()) {
+            u32 seq = 0;
+            f32 height = 0.f;
+            f32 speed = 0.f;
+            f32 accel = 0.f;
+            f32 duration = 0.f;
+            LiftController::GetLastCommand(seq, height, speed, accel, duration);
+            HAL::SetLiftCommand(seq, height, speed, accel, duration);
+          }
+          HAL::SetMotorSetpoints(valid);
+        }
+#endif
 
         MARK_NEXT_TIME_PROFILE(CozmoBot, LIGHTS);
         BackpackLightController::Update();
@@ -585,6 +630,15 @@ namespace Anki {
         SpeedController::Manage();
         SteeringController::Manage();
         WheelController::Manage();
+
+#ifdef STANDALONE_SIM
+        {
+          f32 leftMmps = 0.f;
+          f32 rightMmps = 0.f;
+          WheelController::GetDesiredWheelSpeeds(leftMmps, rightMmps);
+          HAL::SetWheelSetpoints(leftMmps, rightMmps);
+        }
+#endif
 
         //////////////////////////////////////////////////////////////
         // Power management
@@ -629,7 +683,7 @@ namespace Anki {
 
         // Report main cycle time error
         if (nextMainCycleTimeErrorReportTime_usec_ < cycleEndTime) {
-
+#ifndef STANDALONE_SIM
           const bool reportTooLate = (mainTooLateCnt_ >= MIN_TOO_LATE_COUNT_PER_REPORTING_PERIOD) || 
                                      (maxMainTooLateTime_usec_ >= INSTANT_WARNING_TOO_LATE_TIME_THRESH_USEC);
           const bool reportTooLong = (mainTooLongCnt_ >= MIN_TOO_LONG_COUNT_PER_REPORTING_PERIOD) || 
@@ -660,6 +714,7 @@ namespace Anki {
             }
 
           }
+#endif
 
           mainTooLateCnt_ = 0;
           avgMainTooLateTime_usec_ = 0;

@@ -126,6 +126,9 @@ static const INIT_SCRIPT display_on_scr_midas[] = {
 };
 
 static uint32_t get_vector_hw_version() {
+#ifdef STANDALONE_SIM
+  return 0;
+#endif
   int fd = -1;
   uint32_t emr_data[8]; // The emr header
 
@@ -220,6 +223,10 @@ static int lcd_spi_init()
 }
 
 static void lcd_spi_transfer(int cmd, int bytes, const void* data) {
+#ifdef STANDALONE_SIM
+  (void)cmd; (void)bytes; (void)data;
+  return;
+#else
   const uint8_t* tx_buf = data;
 
   gpio_set_value(DnC_PIN, cmd ? gpio_LOW : gpio_HIGH);
@@ -232,6 +239,7 @@ static void lcd_spi_transfer(int cmd, int bytes, const void* data) {
     bytes -= count;
     tx_buf += count;
   }
+#endif // STANDALONE_SIM
 }
 
 static void lcd_run_script(const INIT_SCRIPT* script)
@@ -349,7 +357,106 @@ void lcd_draw_frame2_santek(const uint16_t* frame, size_t size) {
    }
 }
 
+#ifdef STANDALONE_SIM
+#include <sys/socket.h>
+#include <string.h>
+#include <time.h>
+#include "vic_face_protocol.h"
+#include "vic_net.h"
+
+static uint32_t s_faceSeq = 0;
+static int s_faceUdpFd = -1;
+static struct sockaddr_storage s_facePeer;
+static socklen_t s_facePeerLen = 0;
+static int s_faceHavePeer = 0;
+static double s_faceLastHello = -1.0;
+
+static double lcd_sim_mono_now(void) {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return (double)ts.tv_sec + (double)ts.tv_nsec * 1e-9;
+}
+
+static void lcd_sim_face_drain_hellos(void) {
+  for (;;) {
+    char buf[16];
+    struct sockaddr_storage src;
+    socklen_t srcLen = sizeof(src);
+    ssize_t r = recvfrom(s_faceUdpFd, buf, sizeof(buf), MSG_DONTWAIT,
+                         (struct sockaddr*)&src, &srcLen);
+    if (r < 0) {
+      break;
+    }
+    s_facePeer = src;
+    s_facePeerLen = srcLen;
+    s_faceHavePeer = 1;
+    s_faceLastHello = lcd_sim_mono_now();
+  }
+  if (s_faceHavePeer && lcd_sim_mono_now() - s_faceLastHello > 3.0) {
+    s_faceHavePeer = 0;
+  }
+}
+
+static void lcd_sim_send_face(const uint16_t* frame, size_t size) {
+  static int inited = 0;
+  if (!inited) {
+    s_faceUdpFd = vicnet_udp_server(NULL, VIC_NET_PORT_FACE);
+    inited = 1;
+  }
+  if (s_faceUdpFd < 0) {
+    return;
+  }
+  const size_t npix = (size_t)VIC_FACE_NPIX;
+  if (frame == NULL || size < npix * sizeof(uint16_t)) {
+    return;
+  }
+  lcd_sim_face_drain_hellos();
+  if (!s_faceHavePeer) {
+    return;
+  }
+  static VicFaceFrame ff;
+  ff.magic = VIC_FACE_MAGIC;
+  ff.version = VIC_FACE_VERSION;
+  ff.seq = s_faceSeq++;
+  ff.width = VIC_FACE_WIDTH;
+  ff.height = VIC_FACE_HEIGHT;
+  memcpy(ff.rgb565, frame, npix * sizeof(uint16_t));
+  sendto(s_faceUdpFd, &ff, sizeof(ff), MSG_NOSIGNAL | MSG_DONTWAIT,
+         (struct sockaddr*)&s_facePeer, s_facePeerLen);
+}
+
+static void lcd_sim_dump_frame(const uint16_t* frame, size_t size) {
+  const int w = LCD_FRAME_WIDTH_SANTEK; // 184
+  const int h = LCD_FRAME_HEIGHT_SANTEK; // 96
+  const size_t npix = (size_t)w * h;
+  if (frame == NULL || size < npix * sizeof(uint16_t)) {
+    return;
+  }
+  FILE* f = fopen("/tmp/vector_face.ppm.tmp", "wb");
+  if (f == NULL) {
+    return;
+  }
+  fprintf(f, "P6\n%d %d\n255\n", w, h);
+  for (size_t i = 0; i < npix; i++) {
+    const uint16_t px = frame[i];
+    const unsigned char rgb[3] = {
+      (unsigned char)(((px >> 11) & 0x1F) * 255 / 31), //R
+      (unsigned char)(((px >>  5) & 0x3F) * 255 / 63), //G
+      (unsigned char)(( px        & 0x1F) * 255 / 31), //B
+    };
+    fwrite(rgb, 1, sizeof(rgb), f);
+  }
+  fclose(f);
+  rename("/tmp/vector_face.ppm.tmp", "/tmp/vector_face.ppm");
+}
+#endif
+
 void lcd_draw_frame2(const uint16_t* frame, size_t size) {
+#ifdef STANDALONE_SIM
+  lcd_sim_dump_frame(frame, size);
+  lcd_sim_send_face(frame, size);
+  return;
+#endif
   if (LCD_DISPLAY_MAN != SANTEK) {
     lcd_draw_frame2_midas(frame, size);
   } else {
@@ -402,6 +509,14 @@ int lcd_set_brightness(int brightness)
 }
 
 int lcd_init(void) {
+
+#ifdef STANDALONE_SIM
+  isXray = false;
+  LCD_DISPLAY_MAN = lcd_display_version();
+  lcd_use_fb = FALSE;
+  lcd_fd = open("/dev/null", O_WRONLY);
+  return 0;
+#endif
 
   // define LCD manufacturer rather than read the EMR partition upon EVERY SINGLE LCD DRAW
   InitIsXray();

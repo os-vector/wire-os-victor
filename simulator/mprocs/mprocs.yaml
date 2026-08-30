@@ -1,0 +1,11 @@
+procs:
+  webots:
+    shell: "bash simulator/mprocs/run_webots.sh"
+  robot:
+    shell: "sleep 1 && bash simulator/mprocs/run_chroot.sh /anki/bin/vic-robot"
+  engine:
+    shell: "sleep 2 && bash simulator/mprocs/run_chroot.sh /anki/bin/vic-engine"
+  anim:
+    shell: "sleep 3 && bash simulator/mprocs/run_chroot.sh /anki/bin/vic-anim"
+  cloud:
+    shell: "sleep 4 && bash simulator/mprocs/run_chroot.sh /anki/bin/vic-cloud"

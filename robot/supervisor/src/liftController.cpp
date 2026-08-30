@@ -41,7 +41,7 @@ namespace Anki {
         // to have settled enough for recalibration.
         const u32 LIFT_RELAX_TIME_MS = 250;
 
-        const f32 MAX_LIFT_CONSIDERED_STOPPED_RAD_PER_SEC = 0.001f;
+        const f32 MAX_LIFT_CONSIDERED_STOPPED_RAD_PER_SEC = IsCozmoBody() ? 0.05f : 0.001f;
 
         const f32 SPEED_FILTERING_COEFF = 0.9f;
 
@@ -60,32 +60,31 @@ namespace Anki {
         const f32 NO_D_TERM_LIFT_ANGLE_HIGH_RANGE_MIN_RAD = LIFT_ANGLE_HIGH_LIMIT_RAD - DEG_TO_RAD(5.f);
         const f32 NO_D_TERM_LIFT_ANGLE_HIGH_RANGE_MAX_RAD = LIFT_ANGLE_HIGH_LIMIT_RAD;
 
-#ifdef SIMULATOR
-        // Only angles greater than this can contribute to error
-        // This is to prevent micro-oscillations in sim which make the lift
-        // never actually stop moving
-        const f32 ENCODER_ANGLE_RES = DEG_TO_RAD_F32(0.35f);
-
+#if defined(SIMULATOR) || defined(STANDALONE_SIM)
         // For disengaging gripper once the lift has reached its final position
         bool disengageGripperAtDest_ = false;
         f32  disengageAtAngle_ = 0.f;
 
         // The height of the "fingers"
         const f32 LIFT_FINGER_HEIGHT = 3.8f;
+#endif
+
+#if defined(SIMULATOR) || defined(STANDALONE_SIM)
+        const f32 ENCODER_ANGLE_RES = DEG_TO_RAD_F32(IsCozmoBody() ? 0.75f : 0.35f);
 
         f32 Kp_ = 3.f; // proportional control constant
         f32 Kd_ = 0.f;  // derivative gain
         f32 Ki_ = 0.f; // integral control constant
         f32 angleErrorSum_ = 0.f;
         f32 MAX_ERROR_SUM = 10.f;
-#else // ifdef SIMULATOR
+#else // sim gains
 
         f32 Kp_ = 3.f;     // proportional control constant
         f32 Kd_ = 3000.f;  // derivative gain
         f32 Ki_ = 0.1f;    // integral control constant
         f32 angleErrorSum_ = 0.f;
         f32 MAX_ERROR_SUM = 5.f;
-#endif // ifdef SIMULATOR
+#endif // sim gains
 
         // Amount by which angleErrorSum decays to MAX_ANGLE_ERROR_SUM_IN_POSITION
         const f32 ANGLE_ERROR_SUM_DECAY_STEP = 0.02f;
@@ -109,9 +108,17 @@ namespace Anki {
         // and the lower lift joint on the forklift assembly.
         f32 currentAngle_rad_ = 0.f;
         f32 desiredAngle_rad_ = 0.f;
+        u32 cmdSeq_ = 0;
+        f32 cmdHeightMm_ = 0.f;
+        f32 cmdSpeed_ = 0.f;
+        f32 cmdAccel_ = 0.f;
+        f32 cmdDuration_ = 0.f;
         f32 currDesiredAngle_rad_ = 0.f;
         f32 prevAngleError_ = 0.f;
         f32 prevHalPos_ = 0.f;
+#ifdef STANDALONE_SIM
+        bool halPosSeeded_ = false;
+#endif
         bool inPosition_  = true;
 
         const u32 IN_POSITION_TIME_MS = 100;
@@ -230,7 +237,7 @@ namespace Anki {
           enableAtTime_ms_ = 0;  // Reset auto-enable trigger time
 
           ResetAnglePosition(currentAngle_rad_);
-#ifdef SIMULATOR
+#if defined(SIMULATOR) || defined(STANDALONE_SIM)
           // SetDesiredHeight might engage the gripper, but we don't want it engaged right now.
           HAL::DisengageGripper();
 #endif
@@ -525,7 +532,7 @@ namespace Anki {
         // Do range check on angle
         const f32 newDesiredAngle = CLIP(angle_rad, MIN_LIFT_ANGLE, MAX_LIFT_ANGLE);
 
-#ifdef SIMULATOR
+#if defined(SIMULATOR) || defined(STANDALONE_SIM)
         if(!HAL::IsGripperEngaged()) {
           // If the new desired height will make the lift move upward, turn on
           // the gripper's locking mechanism so that we might pick up a block as
@@ -571,6 +578,12 @@ namespace Anki {
 
         lastInPositionTime_ms_ = 0;
         inPosition_ = false;
+
+        ++cmdSeq_;
+        cmdHeightMm_ = ConvertLiftAngleToLiftHeightMM(desiredAngle_rad_);
+        cmdSpeed_ = maxSpeedRad_;
+        cmdAccel_ = accelRad_;
+        cmdDuration_ = duration_seconds;
 
 
         bool res = false;
@@ -661,6 +674,15 @@ namespace Anki {
                                   speed_rad_per_sec, accel_rad_per_sec2, useVPG);
       }
 
+      void GetLastCommand(u32& seq, f32& heightMm, f32& speed, f32& accel, f32& duration)
+      {
+        seq = cmdSeq_;
+        heightMm = cmdHeightMm_;
+        speed = cmdSpeed_;
+        accel = cmdAccel_;
+        duration = cmdDuration_;
+      }
+
       f32 GetDesiredHeight()
       {
         return ConvertLiftAngleToLiftHeightMM(desiredAngle_rad_);
@@ -723,6 +745,14 @@ namespace Anki {
       {
         u32 currTime = HAL::GetTimeStamp();
 
+#ifdef STANDALONE_SIM
+        if (!halPosSeeded_ && HAL::SimBodyIsLive()) {
+          halPosSeeded_ = true;
+          prevHalPos_ = HAL::MotorGetPosition(MotorID::MOTOR_LIFT);
+          currentAngle_rad_ = prevHalPos_;
+        }
+#endif
+
         // Update routine for calibration sequence
         CalibrationUpdate();
 
@@ -783,7 +813,7 @@ namespace Anki {
           return RESULT_OK;
         }
 
-#ifdef SIMULATOR
+#if defined(SIMULATOR) || defined(STANDALONE_SIM)
         if (disengageGripperAtDest_ && currentAngle_rad_ < disengageAtAngle_) {
           HAL::DisengageGripper();
           disengageGripperAtDest_ = false;
@@ -821,7 +851,7 @@ namespace Anki {
         // Compute position error
         f32 angleError = currDesiredAngle_rad_ - currentAngle_rad_;
 
-#ifdef SIMULATOR
+#if defined(SIMULATOR) || defined(STANDALONE_SIM)
         // Ignore if it's less than encoder resolution
         if (ABS(angleError) < ENCODER_ANGLE_RES) {
           angleError = 0;
@@ -937,7 +967,7 @@ namespace Anki {
 
       void CheckForLoad(void (*callback)(bool))
       {
-#ifdef SIMULATOR
+#if defined(SIMULATOR) || defined(STANDALONE_SIM)
         if (callback) {
           callback(HAL::IsGripperEngaged());
         }

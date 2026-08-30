@@ -7,7 +7,8 @@ cxx_project(
                                     ]),
     platform_srcs = [
         ('vicos', glob(['**/*_vicos.cpp',
-                          '**/bleClient/*'])),
+                          '**/bleClient/*',
+                          '**/simCubeClient/*'])),
         ('mac', glob(['**/*_mac.cpp']))
     ],
     headers = cxx_header_glob(['.'])

@@ -24,10 +24,20 @@
 
 #include "camera/vicos/camera_client/camera_client.h"
 
+#include <algorithm>
 #include <vector>
 #include <mutex>
 #include <chrono>
 #include <unistd.h>
+
+#ifdef STANDALONE_SIM
+#include "vic_cam_protocol.h"
+#include "vic_net.h"
+#include <sys/socket.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <cstring>
+#endif
 
 #ifdef SIMULATOR
 #error SIMULATOR should NOT be defined by any target using cameraService_vicos.cpp
@@ -59,6 +69,98 @@ namespace Anki {
       bool _skipNextImage = false;
       bool _cameraPaused = false;
       bool _temporaryUnpause = false;
+
+#ifdef STANDALONE_SIM
+      int    _camServerFd = -1;
+      int    _camClientFd = -1;
+      VicCamFrame     _camRxFrame;
+      size_t          _camRxOff   = 0;
+      std::vector<u8> _camLatestYUV;
+      bool            _camHaveFrame = false;
+
+      void SimCameraServerInit()
+      {
+        if (_camServerFd >= 0) {
+          return;
+        }
+        vicnet_sock_t fd = vicnet_tcp_server(nullptr, VIC_NET_PORT_CAM);
+        if (fd == VICNET_INVALID_SOCK) {
+          LOG_WARNING("WIRE camera TCP didn't bind", "port %d errno %d",
+                      VIC_NET_PORT_CAM, errno);
+          return;
+        }
+        _camServerFd = fd;
+        LOG_INFO("WIRE camera is now listening!!", "tcp port %d",
+                 VIC_NET_PORT_CAM);
+      }
+
+      void SimCameraServiceSocket()
+      {
+        SimCameraServerInit();
+
+        if (_camServerFd >= 0 && _camClientFd < 0) {
+          int c = accept(_camServerFd, nullptr, nullptr);
+          if (c >= 0) {
+            int fl = fcntl(c, F_GETFL, 0);
+            if (fl >= 0) {
+              fcntl(c, F_SETFL, fl | O_NONBLOCK);
+            }
+            int rcvbuf = 2 * 1024 * 1024;
+            setsockopt(c, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
+            _camClientFd = c;
+            _camRxOff = 0;
+            LOG_INFO("WIRE cam connected", "bridge attached");
+          }
+        }
+
+        if (_camClientFd < 0) {
+          return;
+        }
+
+        for (;;) {
+          u8* dst = reinterpret_cast<u8*>(&_camRxFrame) + _camRxOff;
+          const size_t want = sizeof(_camRxFrame) - _camRxOff;
+          ssize_t n = recv(_camClientFd, dst, want, 0);
+          if (n > 0) {
+            _camRxOff += (size_t)n;
+            if (_camRxOff == sizeof(_camRxFrame)) {
+              _camRxOff = 0;
+              if (_camRxFrame.magic == VIC_CAM_MAGIC &&
+                  _camRxFrame.version == VIC_CAM_VERSION) {
+                const size_t frameBytes =
+                  ((size_t)CAMERA_SENSOR_RESOLUTION_WIDTH * CAMERA_SENSOR_RESOLUTION_HEIGHT * 3) / 2;
+                if (_camRxFrame.width == CAMERA_SENSOR_RESOLUTION_WIDTH &&
+                    _camRxFrame.height == CAMERA_SENSOR_RESOLUTION_HEIGHT) {
+                  if (_camLatestYUV.size() != frameBytes) {
+                    _camLatestYUV.resize(frameBytes);
+                  }
+                  memcpy(_camLatestYUV.data(), _camRxFrame.yuv, frameBytes);
+                  _camHaveFrame = true;
+                } else {
+                  LOG_WARNING("WIRE cam size mismatch", "got %ux%u want %ux%u",
+                              _camRxFrame.width, _camRxFrame.height,
+                              CAMERA_SENSOR_RESOLUTION_WIDTH, CAMERA_SENSOR_RESOLUTION_HEIGHT);
+                }
+              } else {
+                LOG_WARNING("WIRE bad magic", "magic mismatch");
+                close(_camClientFd);
+                _camClientFd = -1;
+                break;
+              }
+            }
+            continue;
+          }
+          if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            break;
+          }
+          close(_camClientFd);
+          _camClientFd = -1;
+          _camRxOff = 0;
+          break;
+        }
+      }
+
+#endif // STANDALONE_SIM
     } // "private" namespace
 
 #pragma mark --- Hardware Method Implementations ---
@@ -113,13 +215,23 @@ namespace Anki {
 
     bool IsCameraReady()
     {
+#ifdef STANDALONE_SIM
+      return _powerState == CameraPowerState::Running;
+#else
       return (_camera != NULL &&
               _powerState == CameraPowerState::Running);
+#endif
     }
 
     Result CameraService::InitCamera()
     {
       std::lock_guard<std::mutex> lock(_lock);
+
+#ifdef STANDALONE_SIM
+      SimCameraServerInit();
+      _powerState = CameraPowerState::Running;
+      return RESULT_OK;
+#endif
 
       anki_camera_status_t status = camera_status(_camera);
       if(status == ANKI_CAMERA_STATUS_RUNNING &&
@@ -209,6 +321,9 @@ namespace Anki {
 
     void CameraService::PauseCamera(bool pause)
     {
+#ifdef STANDALONE_SIM
+      return;
+#endif
       camera_pause(_camera, pause);
       // Technically only need to skip the next image when unpausing but since
       // you can't get images while paused it does not matter that this is being set
@@ -219,6 +334,9 @@ namespace Anki {
 
     Result CameraService::Update()
     {
+#ifdef STANDALONE_SIM
+      return RESULT_OK;
+#endif
       //
       // Check camera_client status and re-init / re-start if necessary
       //
@@ -316,6 +434,19 @@ namespace Anki {
 
     void CameraService::CameraSetParameters(u16 exposure_ms, f32 gain)
     {
+#ifdef STANDALONE_SIM
+      {
+        std::lock_guard<std::mutex> lock(_lock);
+        if (_camClientFd >= 0) {
+          VicCamParams p;
+          p.magic = VIC_CAM_PARAMS_MAGIC;
+          p.exposureMs = exposure_ms;
+          p.gain = gain;
+          send(_camClientFd, &p, sizeof(p), MSG_NOSIGNAL);
+        }
+        return;
+      }
+#endif
       if(!IsCameraReady()) {
         return;
       }
@@ -334,6 +465,9 @@ namespace Anki {
 
     void CameraService::CameraSetWhiteBalanceParameters(f32 r_gain, f32 g_gain, f32 b_gain)
     {
+#ifdef STANDALONE_SIM
+      return;
+#endif
       if(!IsCameraReady()) {
         return;
       }
@@ -356,6 +490,9 @@ namespace Anki {
     
     void CameraService::CameraSetCaptureFormat(Vision::ImageEncoding format)
     {
+#ifdef STANDALONE_SIM
+      return;
+#endif
       if(!IsCameraReady()) {
         return;
       }
@@ -387,6 +524,9 @@ namespace Anki {
 
     void CameraService::CameraSetCaptureSnapshot(bool start)
     {
+#ifdef STANDALONE_SIM
+      return; // no camera hardware
+#endif
       if(!IsCameraReady())
       {
         return;
@@ -400,6 +540,40 @@ namespace Anki {
     
     bool CameraService::CameraGetFrame(u32 atTimestamp_ms, Vision::ImageBuffer& buffer)
     {
+#ifdef STANDALONE_SIM
+      {
+        std::lock_guard<std::mutex> lock(_lock);
+
+        SimCameraServiceSocket();
+
+        const s32 width  = CAMERA_SENSOR_RESOLUTION_WIDTH;
+        const s32 height = CAMERA_SENSOR_RESOLUTION_HEIGHT;
+        const size_t ySize = (size_t)width * height;
+        const size_t frameSize = ySize + ySize / 2;
+
+        u8* frameData = nullptr;
+        if (_camHaveFrame && _camLatestYUV.size() == frameSize) {
+          frameData = _camLatestYUV.data();
+        } else {
+          static std::vector<u8> blackFrame;
+          if (blackFrame.size() != frameSize) {
+            blackFrame.assign(frameSize, (u8)128);
+            std::fill_n(blackFrame.begin(), ySize, (u8)0);
+          }
+          frameData = blackFrame.data();
+        }
+
+        _imageFrameID++;
+        //stamp the frame with the REQUESTED timestamp
+        const TimeStamp_t timestamp = (atTimestamp_ms != 0) ? (TimeStamp_t)atTimestamp_ms
+                                                            : GetTimeStamp();
+        const s32 bufferRows = (height * 3) / 2;
+        buffer = Vision::ImageBuffer(frameData, bufferRows, width,
+                                     Vision::ImageEncoding::YUV420sp, timestamp, _imageFrameID);
+        return true;
+      }
+#endif
+
       if(!IsCameraReady()) {
         return false;
       }
@@ -490,6 +664,9 @@ namespace Anki {
 
     bool CameraService::CameraReleaseFrame(u32 imageID)
     {
+#ifdef STANDALONE_SIM
+      return true;
+#else
       if(!IsCameraReady()) {
         return false;
       }
@@ -497,6 +674,7 @@ namespace Anki {
       std::lock_guard<std::mutex> lock(_lock);
       int rc = camera_frame_release(_camera, imageID);
       return (rc == 0);
+#endif
     }
   } // namespace Vector
 } // namespace Anki

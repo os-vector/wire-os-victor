@@ -477,7 +477,7 @@ namespace Anki {
                   case DockAction::DA_PICKUP_HIGH:
                   {
                     SendPickAndPlaceResultMessage(false, BlockStatus::BLOCK_PICKED_UP);
-#ifdef SIMULATOR
+#if defined(SIMULATOR) || defined(STANDALONE_SIM)
                     // Disengage the 'gripper' here since we have failed to dock with the cube
                     HAL::DisengageGripper();
 #endif
@@ -700,7 +700,7 @@ namespace Anki {
                 {
                   LiftController::SetDesiredHeight(LIFT_HEIGHT_LOWDOCK, DEFAULT_LIFT_SPEED_RAD_PER_SEC, DEFAULT_LIFT_ACCEL_RAD_PER_SEC2);
 
-                  #ifdef SIMULATOR
+                  #if defined(SIMULATOR) || defined(STANDALONE_SIM)
                   // Prevents lift from attaching to block right after a roll
                   HAL::DisengageGripper();
                   #endif

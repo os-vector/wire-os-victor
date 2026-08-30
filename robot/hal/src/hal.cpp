@@ -24,6 +24,10 @@
 #include "../spine/spine.h"
 #include "../spine/cc_commander.h"
 
+#ifdef STANDALONE_SIM
+#include "sim_body_bridge.h"
+#endif
+
 #include "schema/messages.h"
 #include "clad/robotInterface/messageRobotToEngine.h"
 #include "clad/robotInterface/messageRobotToEngine_send_helper.h"
@@ -54,7 +58,10 @@ namespace { // "Private members"
 
 #ifdef HAL_DUMMY_BODY
   BodyToHead dummyBodyData_ = {
-    .cliffSense = {800, 800, 800, 800}
+    .cliffSense = {800, 800, 800, 800},
+    .battery = { 0,
+                 static_cast<int16_t>(4.0f / (2.8f / 2048.f)),
+                 0  },
   };
 #endif
   // For storing latest prox data from body
@@ -133,6 +140,18 @@ BodyToHead BootBodyData_{
   bool _bodyDataPrintBattery    = false;
 
   bool maxNumSelectTimeoutsReached_ = false;
+
+#ifdef STANDALONE_SIM
+  TimeStamp_t simTimeMs_ = 0;
+  bool        simClockAnchored_ = false;
+
+  TimeStamp_t WallClockMs()
+  {
+    auto now = std::chrono::steady_clock::now();
+    return static_cast<TimeStamp_t>(
+      std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count());
+  }
+#endif
 
   VersionInfo _sysconVersionInfo;
 
@@ -449,6 +468,11 @@ Result HAL::Init(const int * shutdownSignal)
 #else
   bodyData_ = &dummyBodyData_;
 #endif
+
+#ifdef STANDALONE_SIM
+  SimBodyBridge::Init();
+#endif
+
   assert(bodyData_ != nullptr);
 
 
@@ -574,13 +598,12 @@ Result HAL::Step(void)
   EventStep();
   EventStart(EventType::HAL_STEP);
 
-  static uint32_t last_packet_send = 0;
-  uint32_t now = GetMicroCounter();
-
   Result result = RESULT_OK;
   bool commander_is_active = false;
 
 #ifndef HAL_DUMMY_BODY
+  static uint32_t last_packet_send = 0;
+  uint32_t now = GetMicroCounter();
 
   headData_.framecounter++;
 
@@ -681,6 +704,21 @@ Result HAL::Step(void)
   }
 
 #else // else have dummy body
+
+#ifdef STANDALONE_SIM
+  headData_.framecounter++;
+  const int freshBodyFrames = SimBodyBridge::Exchange(headData_);
+  const BodyToHead* simBody = SimBodyBridge::LatestBody();
+  bodyData_ = simBody ? const_cast<BodyToHead*>(simBody) : &dummyBodyData_;
+  if (freshBodyFrames > 0) {
+    if (!simClockAnchored_) {
+      simTimeMs_ = WallClockMs();
+      simClockAnchored_ = true;
+    } else {
+      simTimeMs_ += (TimeStamp_t)freshBodyFrames * ROBOT_TIME_STEP_MS;
+    }
+  }
+#endif
 
 #if !PROCESS_IMU_ON_THREAD
   ProcessIMUEvents();
@@ -863,18 +901,26 @@ void HAL::MicroWait(u32 microseconds)
 
 TimeStamp_t HAL::GetTimeStamp(void)
 {
+#ifdef STANDALONE_SIM
+  return simClockAnchored_ ? simTimeMs_ : WallClockMs();
+#else
   // Note: steady_clock starts at zero from bootup so realistically this
   //       should never overflow under normal use.
   auto currTime = std::chrono::steady_clock::now();
   return static_cast<TimeStamp_t>(std::chrono::duration_cast<std::chrono::milliseconds>(currTime.time_since_epoch()).count());
+#endif
 }
 
 void HAL::SetLED(LEDId led_id, u32 color)
 {
   assert(led_id >= 0 && led_id < LED_COUNT);
 
+#if defined(STANDALONE_SIM)
+  const u32 ledIdx = led_id;
+#else
   // Light order is swapped in syscon
   const u32 ledIdx = LED_COUNT - led_id - 1;
+#endif
 
   uint8_t r = (color >> LED_RED_SHIFT) & LED_CHANNEL_MASK;
   uint8_t g = (color >> LED_GRN_SHIFT) & LED_CHANNEL_MASK;
@@ -1021,6 +1067,37 @@ bool HAL::HandleLatestMicData(SendDataFunction sendDataFunc)
   #endif
   return false;
 }
+
+#ifdef STANDALONE_SIM
+namespace { bool simGripperEngaged_ = false; }
+void HAL::EngageGripper()    { simGripperEngaged_ = true;  SimBodyBridge::SetGripper(true); }
+void HAL::DisengageGripper() { simGripperEngaged_ = false; SimBodyBridge::SetGripper(false); }
+bool HAL::IsGripperEngaged() { return simGripperEngaged_; }
+
+bool HAL::SimBodyIsLive() { return SimBodyBridge::LatestBody() != nullptr; }
+
+void HAL::SetHeadCommand(u32 seq, f32 angleRad, f32 speedRadPerSec,
+                         f32 accelRadPerSec2, f32 durationSec)
+{
+  SimBodyBridge::SetHeadCommand(seq, angleRad, speedRadPerSec, accelRadPerSec2, durationSec);
+}
+
+void HAL::SetLiftCommand(u32 seq, f32 heightMm, f32 speedRadPerSec,
+                         f32 accelRadPerSec2, f32 durationSec)
+{
+  SimBodyBridge::SetLiftCommand(seq, heightMm, speedRadPerSec, accelRadPerSec2, durationSec);
+}
+
+void HAL::SetMotorSetpoints(u8 valid)
+{
+  SimBodyBridge::SetMotorSetpoints(valid);
+}
+
+void HAL::SetWheelSetpoints(f32 leftMmps, f32 rightMmps)
+{
+  SimBodyBridge::SetWheelSetpoints(leftMmps, rightMmps);
+}
+#endif
 
 f32 HAL::BatteryGetVoltage()
 {

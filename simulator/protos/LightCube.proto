@@ -1,10 +1,15 @@
-#VRML_SIM V7.3.0 utf8
+#VRML_SIM R2021b utf8
 
 PROTO LightCube [
   field SFString   name         "LightCube"
   field SFVec3f    translation  0 0 0
   field SFRotation rotation     0 0 1 0
   field MFVec3f    ledColors    [ 0 0 0, 0 0 0, 0 0 0, 0 0 0 ]
+
+  field SFColor    led0Color    0 0 0
+  field SFColor    led1Color    0 0 0
+  field SFColor    led2Color    0 0 0
+  field SFColor    led3Color    0 0 0
   field SFBool     filterLogs FALSE
   field SFBool     colorizeStderrOutput FALSE
   
@@ -17,6 +22,9 @@ PROTO LightCube [
   # a 6-byte unique identifier in hex (e.g. "ED:BB:02:DE:85:23").
   # See activeBlock.cpp
   field SFString   factoryID    ""
+
+  # Legacy SIMULATOR cube controller; STANDALONE_SIM worlds set "".
+  field SFString   controller   "webotsCtrlLightCube"
 ]
 {
   Block1x1 {
@@ -25,6 +33,11 @@ PROTO LightCube [
     rotation IS rotation
     filterLogs IS filterLogs
     colorizeStderrOutput IS colorizeStderrOutput
+    led0Color IS led0Color
+    led1Color IS led1Color
+    led2Color IS led2Color
+    led3Color IS led3Color
+    controller IS controller
     %{ if fields.objectType.value == "Block_LIGHTCUBE1" then }%
       blockColor 0.2 0.2 0.2
       markerWidth 0.023

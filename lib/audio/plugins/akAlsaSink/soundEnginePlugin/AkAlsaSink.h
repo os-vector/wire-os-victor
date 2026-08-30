@@ -22,6 +22,10 @@
 
 #include <functional>
 #include <mutex>
+#ifdef STANDALONE_SIM
+#include <atomic>
+#include <cstdint>
+#endif
 
 /////////////////////////////////////////////////////
 // Static buffer size
@@ -92,6 +96,16 @@ public:
 	bool											m_bCustomThreadEnable;
 	snd_async_handler_t *                           m_pPcm_callback_handle;
 	AkUInt32										m_uCpuMask;
+#ifdef STANDALONE_SIM
+	int												m_simAudioFd = -1;
+	uint32_t										m_simSpkrSeq = 0;
+	std::atomic<uint64_t> m_simDrains{0};
+	std::atomic<uint64_t> m_simStarves{0};
+	std::atomic<uint64_t> m_simEvictions{0};
+	std::atomic<uint64_t> m_simSilence{0};
+	std::atomic<uint64_t> m_simBlockedWrites{0};
+	std::atomic<uint32_t> m_simRingMax{0};
+#endif
 
 	using SinkPluginTypes = Anki::AudioEngine::PlugIns::AkAlsaSinkPluginTypes;
 	

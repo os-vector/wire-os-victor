@@ -90,3 +90,10 @@ target_include_directories(cameraService
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..> # allow "vicos/" prefix
   ${PLATFORM_INCLUDES}
 )
+
+if (STANDALONE_SIM)
+  target_include_directories(cameraService
+    PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/simulator/bridge>
+  )
+endif()

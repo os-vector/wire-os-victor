@@ -950,7 +950,7 @@ namespace Anki {
           gyro_[i] = imu_data_.gyro[i] - gyro_bias_filt[i];
         }
 
-#ifndef SIMULATOR
+#if !defined(SIMULATOR) && !defined(STANDALONE_SIM)
         // VECTOR: Correct for observed sensitivity error on z axis of gyro (VIC-285)
         // It has been observed that the z axis gyro usually reports about a 1.03% higher
         // rate than it is actually experiencing, so simply scale it here.

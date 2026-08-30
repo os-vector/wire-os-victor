@@ -230,7 +230,7 @@ void MovementComponent::CheckForUnexpectedMovement(const Vector::RobotState& rob
   
   // Disabling for sim robot due to odd behavior of measured wheel speeds and the lack
   // of wheel slip that is what allows this detection to work on the real robot
-  if (!_robot->IsPhysical())
+  if (!_robot->IsPhysical() && !IsCozmoBody())
   {
     return;
   }

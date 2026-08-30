@@ -10,10 +10,20 @@
 #endif
 
 #include <math.h>
+#include <stdlib.h>
 #include "anki/cozmo/shared/factory/emrHelper.h"
 
 namespace Anki {
 namespace Vector {
+
+  inline bool IsCozmoBody()
+  {
+    static const bool isCozmo = [] {
+      const char* s = getenv("IS_COZMO");
+      return s && s[0] == '1';
+    }();
+    return isCozmo;
+  }
 
   /***************************************************************************
    *
@@ -59,8 +69,8 @@ namespace Vector {
   const f32 DRIVE_CENTER_OFFSET = -16.f;
   const f32 DRIVE_CENTER_OFFSET_CARRYING_CUBE = -16.f;
 #else
-  const f32 DRIVE_CENTER_OFFSET = -25.f;
-  const f32 DRIVE_CENTER_OFFSET_CARRYING_CUBE = 0.f;
+  const f32 DRIVE_CENTER_OFFSET = IsCozmoBody() ? -20.f : -25.f;
+  const f32 DRIVE_CENTER_OFFSET_CARRYING_CUBE = IsCozmoBody() ? -20.f : 0.f;
 #endif // SIMULATOR
   
   // Forward distance sensor measurements (TODO: finalize these dimensions on production robot)
@@ -117,7 +127,7 @@ namespace Vector {
   const f32 NECK_JOINT_POSITION[3] = {-13.f, 0.f, 34.5f + WHEEL_RAD_TO_MM};
   
   // camera relative to neck joint
-  const f32 HEAD_CAM_POSITION[3]   = {18.84f, 0.f, -7.96f};
+  const f32 HEAD_CAM_POSITION[3]   = {IsCozmoBody() ? 17.52f : 18.84f, 0.f, IsCozmoBody() ? -8.f : -7.96f};
   
   // Upper shoulder joint relative to robot origin
   const f32 LIFT_BASE_POSITION[3]  = {-41.0f, 0.f, 30.5f + WHEEL_RAD_TO_MM}; // relative to robot origin
@@ -172,11 +182,11 @@ namespace Vector {
   
   const u8 NUM_RADIAL_DISTORTION_COEFFS = 8;
 
-  const u16 DEFAULT_CAMERA_RESOLUTION_WIDTH  =  IsXray() ? 800 : 640;
-  const u16 DEFAULT_CAMERA_RESOLUTION_HEIGHT =  IsXray() ? 600 : 360;
+  const u16 DEFAULT_CAMERA_RESOLUTION_WIDTH  =  IsCozmoBody() ? 320 : (IsXray() ? 800 : 640);
+  const u16 DEFAULT_CAMERA_RESOLUTION_HEIGHT =  IsCozmoBody() ? 240 : (IsXray() ? 600 : 360);
 
-  const u16 CAMERA_SENSOR_RESOLUTION_WIDTH  = IsXray() ? 1600: 1280;
-  const u16 CAMERA_SENSOR_RESOLUTION_HEIGHT = IsXray() ?1200: 720;
+  const u16 CAMERA_SENSOR_RESOLUTION_WIDTH  = IsCozmoBody() ? 640 : (IsXray() ? 1600: 1280);
+  const u16 CAMERA_SENSOR_RESOLUTION_HEIGHT = IsCozmoBody() ? 480 : (IsXray() ?1200: 720);
   
   const f32 MIN_CAMERA_EXPOSURE_TIME_MS = 1;
   const f32 MAX_CAMERA_EXPOSURE_TIME_MS = 66;
@@ -292,7 +302,7 @@ namespace Vector {
   
   // How fast (in mm/sec) can a wheel spin at max
   const f32 MAX_WHEEL_SPEED_MMPS = 220.f;
-  const f32 MAX_WHEEL_ACCEL_MMPS2 = 10000.f;  // TODO: Actually measure this!
+  const f32 MAX_WHEEL_ACCEL_MMPS2 = IsCozmoBody() ? 500.f : 10000.f;
   
   // How fast (in mm/sec) can the robot drive without falling off 
   // (most) straight edge cliffs
@@ -308,7 +318,7 @@ namespace Vector {
   // the robot can actually achieve this top speed. If it can't, point turns could look jerky because
   // the robot can't keep up with the rotation profile.
   // Ideally, speed, in radians, should be (MAX_WHEEL_SPEED_MMPS / WHEEL_DIST_HALF_MM), but tread slip makes this not true.
-  const f32 MAX_BODY_ROTATION_SPEED_DEG_PER_SEC = 300;
+  const f32 MAX_BODY_ROTATION_SPEED_DEG_PER_SEC = IsCozmoBody() ? 150.f : 300.f;
   const f32 MAX_BODY_ROTATION_SPEED_RAD_PER_SEC = DEG_TO_RAD(MAX_BODY_ROTATION_SPEED_DEG_PER_SEC);
   const f32 MAX_BODY_ROTATION_ACCEL_RAD_PER_SEC2 = MAX_BODY_ROTATION_SPEED_RAD_PER_SEC * MAX_WHEEL_ACCEL_MMPS2 / MAX_WHEEL_SPEED_MMPS;
   const f32 MAX_BODY_ROTATION_ACCEL_DEG_PER_SEC2 = RAD_TO_DEG(MAX_BODY_ROTATION_ACCEL_RAD_PER_SEC2);

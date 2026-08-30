@@ -962,6 +962,17 @@ Result BlockWorld::ProcessVisualObservations(const std::vector<std::shared_ptr<O
       _robot->GetCarryingComponent().UnSetCarryingObject();
     }
     
+#ifdef STANDALONE_SIM
+    if (IsChargerType(object->GetType(), false)) {
+      const Pose3d& cur = object->GetPose();
+      const f32 yaw = cur.GetRotation().GetAngleAroundZaxis().ToFloat();
+      Pose3d flat(yaw, Z_AXIS_3D(),
+                  Vec3f(cur.GetTranslation().x(), cur.GetTranslation().y(), 0.f),
+                  cur.GetParent());
+      object->SetPose(flat, object->GetLastPoseUpdateDistance(), object->GetPoseState());
+    }
+#endif // STANDALONE_SIM
+
     // Update map component
     const Pose3d oldPoseCopy = object->GetPose();
     _robot->GetMapComponent().UpdateObjectPose(*object, &oldPoseCopy, PoseState::Known);

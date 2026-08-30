@@ -145,7 +145,7 @@ public:
   const RobotID_t GetID() const;
 
   bool IsPhysical() const {
-#ifdef SIMULATOR
+#if defined(SIMULATOR) || defined(STANDALONE_SIM)
     return false;
 #else
     return true;

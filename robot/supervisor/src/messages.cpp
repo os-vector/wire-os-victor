@@ -164,7 +164,11 @@ namespace Anki {
 
         // Send state message
         ++robotStateMessageCounter_;
+#ifdef STANDALONE_SIM
+        const s32 messagePeriod = STATE_MESSAGE_FREQUENCY;
+#else
         const s32 messagePeriod = calmMode_ ? STATE_MESSAGE_FREQUENCY_CALM : STATE_MESSAGE_FREQUENCY;
+#endif
         if(robotStateMessageCounter_ >= messagePeriod) {
           SendRobotStateMsg();
           robotStateMessageCounter_ = 0;

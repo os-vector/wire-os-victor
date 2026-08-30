@@ -833,8 +833,10 @@ void FaceRecognizer::ExtractFeatures()
   ProcessingState newState = ProcessingState::FeaturesReady;
 
   if(OKAO_NORMAL != okaoResult) {
+#ifndef STANDALONE_SIM
     LOG_WARNING("FaceRecognizer.ExtractFeatures.FaceLibFailure",
                 "Going back to Idle state. FaceLib Result=%d", okaoResult);
+#endif
     newState = ProcessingState::Idle;
   }
 

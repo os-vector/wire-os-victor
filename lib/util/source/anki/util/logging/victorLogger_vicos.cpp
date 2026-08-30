@@ -15,6 +15,32 @@
 #include <assert.h>
 #include <vector>
 
+#ifdef STANDALONE_SIM
+#include <cstdarg>
+#include <cstdio>
+namespace {
+  inline char SimLogLevelChar(int prio) {
+    switch (prio) {
+      case ANDROID_LOG_ERROR: return 'E';
+      case ANDROID_LOG_WARN:  return 'W';
+      case ANDROID_LOG_INFO:  return 'I';
+      case ANDROID_LOG_DEBUG: return 'D';
+      default:                return '?';
+    }
+  }
+  __attribute__((format(printf, 3, 4)))
+  inline void SimLogPrint(int prio, const char* tag, const char* fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    fprintf(stderr, "%c %s ", SimLogLevelChar(prio), tag ? tag : "");
+    vfprintf(stderr, fmt, ap);
+    fputc('\n', stderr);
+    va_end(ap);
+  }
+}
+#define __android_log_print(prio, tag, ...) SimLogPrint((prio), (tag), __VA_ARGS__)
+#endif // STANDALONE_SIM
+
 namespace Anki {
 namespace Util {
 

@@ -77,8 +77,8 @@ namespace Anki {
       
       // Amount by which theoretical wheel velocities are scaled
       // to compensate for tread slip.
-#ifdef SIMULATOR
-      const f32 POINT_TURN_SLIP_COMP_FACTOR = 1.f;
+#if defined(SIMULATOR) || defined(STANDALONE_SIM)
+      const f32 POINT_TURN_SLIP_COMP_FACTOR = IsCozmoBody() ? 1.5f : 1.f;
 #else
       const f32 POINT_TURN_SLIP_COMP_FACTOR = 1.5f;
 #endif
@@ -92,14 +92,15 @@ namespace Anki {
       f32 pointTurnSpeedKi_ = 0.5;
       f32 pointTurnSpeedMaxIntegralError_ = 100;
       
-      f32 pointTurnKp_ = 450.f;
-#ifdef SIMULATOR
-      f32 pointTurnKd_ = 500.f; // Too high a derivative gain causes issues in sim
+      f32 pointTurnKp_ = IsCozmoBody() ? 150.f : 450.f;
+#if defined(SIMULATOR) || defined(STANDALONE_SIM)
+      // Too high a derivative gain causes issues in sim
+      f32 pointTurnKd_ = IsCozmoBody() ? 4000.f : 500.f;
 #else
       f32 pointTurnKd_ = 4000.f;
 #endif
-      f32 pointTurnKi_ = 20.f;
-      f32 pointTurnMaxIntegralError_ = 5;
+      f32 pointTurnKi_ = IsCozmoBody() ? 0.3f : 20.f;
+      f32 pointTurnMaxIntegralError_ = IsCozmoBody() ? 100.f : 5.f;
       f32 prevPointTurnAngleError_ = 0;
       f32 pointTurnAngleErrorSum_ = 0;
       TimeStamp_t inPositionStartTime_ = 0;
@@ -120,6 +121,8 @@ namespace Anki {
       
       // Integrator only accumulates if the angular distance to target is within this value, and is zeroed if not
       const f32 POINT_TURN_INTEGRATOR_THRESH_RAD = DEG_TO_RAD_F32(5.f);
+
+      const s16 POINT_TURN_INTEGRAL_ERROR_ACCUMULATE_SPEED_LIMIT_MMPS = 10;
       
       // Amount by which to reduce P and D gains for low speed turns, to prevent controller 'stuttering'
       // The thresholds below determine when this is active. (this should be between 0 and 1)
@@ -821,10 +824,13 @@ namespace Anki {
         
         // Integral windup protection
         // Only accumulate integral error if we're close to the target angle
-        if (absAngularDistToTarget < POINT_TURN_INTEGRATOR_THRESH_RAD) {
+        const bool accumulate = IsCozmoBody()
+          ? (ABS(arcVel) < POINT_TURN_INTEGRAL_ERROR_ACCUMULATE_SPEED_LIMIT_MMPS)
+          : (absAngularDistToTarget < POINT_TURN_INTEGRATOR_THRESH_RAD);
+        if (accumulate) {
           pointTurnAngleErrorSum_ = pointTurnAngleErrorSum_ + angularDistToCurrDesiredAngle;
           pointTurnAngleErrorSum_ = CLIP(pointTurnAngleErrorSum_, -pointTurnMaxIntegralError_, pointTurnMaxIntegralError_);
-        } else {
+        } else if (!IsCozmoBody()) {
           pointTurnAngleErrorSum_ = 0.f;
         }
         

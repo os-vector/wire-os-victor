@@ -76,7 +76,7 @@ const std::string CreatorWebsite = "kerigan.dev";
 // Forces transition to BLE pairing screen on double button press
 // without waiting for actual START_PAIRING message from switchboard.
 // Mainly useful in sim, where there is currently no switchboard.
-#ifdef SIMULATOR
+#if defined(SIMULATOR) || defined(STANDALONE_SIM)
 #define FORCE_TRANSITION_TO_PAIRING 1
 #else
 #define FORCE_TRANSITION_TO_PAIRING 0
@@ -1059,6 +1059,9 @@ void FaceInfoScreenManager::ProcessMenuNavigation(const RobotState& state)
       LOG_WARNING("FaceInfoScreenManager.ProcessMenuNavigation.ForcedPairing",
                   "Remove FORCE_TRANSITION_TO_PAIRING when switchboard is working");
       SetScreen(ScreenName::Pairing);
+      SwitchboardInterface::SetConnectionStatus connMsg;
+      connMsg.status = SwitchboardInterface::ConnectionStatus::SHOW_PRE_PIN;
+      UpdateConnectionFlow(std::move(connMsg), _animationStreamer, _context);
     }
   }
   else if(doublePressDetected &&
@@ -1293,6 +1296,10 @@ void FaceInfoScreenManager::DrawMain()
 
   std::transform(esn.begin(), esn.end(), esn.begin(),
     [](unsigned char c){ return std::tolower(c); });
+
+  #ifdef STANDALONE_SIM
+    esn = "SIMULATE";
+  #endif
 
   const std::string serialNo = "ESN: "  + esn;
 

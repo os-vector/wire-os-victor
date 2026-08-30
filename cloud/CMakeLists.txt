@@ -56,6 +56,12 @@ set(GATEWAY_PROTO_SRCS "${GATEWAY_PROTO_SRCS}" PARENT_SCOPE)
 set(PROTOBUF_OUTPUT_DIR "${PROTOBUF_OUTPUT_DIR}" PARENT_SCOPE)
 set(GATEWAY_PROTO_HOME_DIR "${GATEWAY_PROTO_HOME_DIR}" PARENT_SCOPE)
 
+if(STANDALONE_SIM)
+  set(VIC_CLOUD_BUILD_TAGS "nolibopusfile")
+else()
+  set(VIC_CLOUD_BUILD_TAGS "vicos nolibopusfile")
+endif()
+
 anki_build_go(
   NAME         vic-cloud
   DIR          "${CMAKE_CURRENT_SOURCE_DIR}"
@@ -63,7 +69,7 @@ anki_build_go(
   INCLUDE_DIRS "${OPUS_INC}"
   LINK_FLAGS   "${OPUS_LIBS}"
   PKG_CONFIG_PATHS "${OPUS_PKGCONFIG}"
-  BUILD_TAGS "vicos nolibopusfile"
+  BUILD_TAGS "${VIC_CLOUD_BUILD_TAGS}"
 )
 
 set(PROTO_SRC_DIR "${GATEWAY_PROTO_HOME_DIR}/public")
