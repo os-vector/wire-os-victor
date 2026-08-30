@@ -1298,7 +1298,7 @@ void FaceInfoScreenManager::DrawMain()
     [](unsigned char c){ return std::tolower(c); });
 
   #ifdef STANDALONE_SIM
-    esn = "NO ESN!";
+    esn = "SIMULATE";
   #endif
 
   const std::string serialNo = "ESN: "  + esn;
