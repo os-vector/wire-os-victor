@@ -116,7 +116,9 @@ namespace Anki {
         f32 currDesiredAngle_rad_ = 0.f;
         f32 prevAngleError_ = 0.f;
         f32 prevHalPos_ = 0.f;
+#ifdef STANDALONE_SIM
         bool halPosSeeded_ = false;
+#endif
         bool inPosition_  = true;
 
         const u32 IN_POSITION_TIME_MS = 100;
