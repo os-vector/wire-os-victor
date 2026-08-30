@@ -331,6 +331,7 @@ int main(int argc, char** argv)
 
   uint32_t frameCounter = 0;
   uint16_t proxSampleCount = 0;
+  uint16_t maxCliffSeen = 0;
   bool readyAnnounced = false;
   double lastStats = WallNow();
 
@@ -759,10 +760,13 @@ int main(int argc, char** argv)
     const bool sensed = robot.HaveState();
 
     const uint16_t frontCliff = sensed ? (uint16_t)(st.cliffRaw[0] * kCliffScale) : kRearCliffValue;
+    if (sensed && frontCliff > maxCliffSeen) {
+      maxCliffSeen = frontCliff;
+    }
     b.cliffSense[0] = frontCliff;
     b.cliffSense[1] = frontCliff;
-    b.cliffSense[2] = frontCliff;
-    b.cliffSense[3] = frontCliff;
+    b.cliffSense[2] = sensed ? maxCliffSeen : kRearCliffValue;
+    b.cliffSense[3] = sensed ? maxCliffSeen : kRearCliffValue;
 
     {
       double volts = st.batteryVoltage;
