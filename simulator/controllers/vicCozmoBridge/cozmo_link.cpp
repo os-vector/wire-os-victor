@@ -4,9 +4,11 @@
 
 namespace cozmo {
 
-static const double kMinRto     = 0.06;
-static const double kMaxRto     = 0.5;
+static const double kMinRto     = 0.05;
+static const double kMaxRto     = 0.2;
 static const double kPingPeriod  = 0.5;
+static const double kMinAckWait = 0.02;
+static const size_t kMaxResendFrames = 3;
 
 double MonotonicSeconds()
 {
@@ -46,7 +48,7 @@ Link::Link()
   , srtt_(0.0)
   , rttvar_(0.0)
   , rttInit_(false)
-  , rtoBackoff_(0)
+  , lastRecvTime_(0.0)
   , rttMin_(0.0)
   , rttMax_(0.0)
   , rttSum_(0.0)
@@ -162,18 +164,20 @@ bool Link::SendWindowAck(uint16_t seq)
     sendExpected_ = SeqAdd(sendExpected_, 1);
     advanced = true;
   }
-  if (advanced) {
-    rtoBackoff_ = 0;
-  }
   return advanced;
+}
+
+double Link::AckWait() const
+{
+  double wait = rttInit_ ? (srtt_ + 4.0 * rttvar_) : kMinAckWait;
+  if (wait < kMinAckWait) { wait = kMinAckWait; }
+  if (wait > kMaxRto) { wait = kMaxRto; }
+  return wait;
 }
 
 double Link::Rto() const
 {
   double rto = rttInit_ ? (srtt_ + 4.0 * rttvar_) : kMinRto;
-  for (int i = 0; i < rtoBackoff_; ++i) {
-    rto *= 2.0;
-  }
   if (rto < kMinRto) { rto = kMinRto; }
   if (rto > kMaxRto) { rto = kMaxRto; }
   return rto;
@@ -492,13 +496,30 @@ void Link::FlushOutgoing()
   std::vector<std::pair<uint16_t, const Packet*> > stale;
   SendWindowPending(stale);
   const bool windowWasEmpty = stale.empty();
-  if (!stale.empty() && lastAckTime_ > 0.0 && now - lastAckTime_ > Rto()) {
-    lastAckTime_ = now;
-    ++timeouts_;
-    if (rtoBackoff_ < 3) { ++rtoBackoff_; }
-    ++resends_;
-    sendWindow_[stale[0].first % kWindowSize].sampled = false;
-    resend.push_back(stale[0]);
+  if (!stale.empty() && lastAckTime_ > 0.0) {
+    const double oldestSent = sendWindow_[stale[0].first % kWindowSize].sent;
+    const bool shouldHaveBeenAcked = lastRecvTime_ > 0.0 && oldestSent < lastRecvTime_ - AckWait();
+    if (shouldHaveBeenAcked || now - lastAckTime_ > Rto()) {
+      lastAckTime_ = now;
+      ++timeouts_;
+      size_t frames = 0;
+      size_t bytes = 0;
+      for (size_t i = 0; i < stale.size(); ++i) {
+        const size_t len = stale[i].second->EncodedSize();
+        if (bytes > 0 && bytes + len > kMaxFramePayloadSize) {
+          if (++frames >= kMaxResendFrames) {
+            break;
+          }
+          bytes = 0;
+        }
+        bytes += len;
+        ++resends_;
+        Slot& slot = sendWindow_[stale[i].first % kWindowSize];
+        slot.sampled = false;
+        slot.sent = now;
+        resend.push_back(stale[i]);
+      }
+    }
   }
 
   while (!outQueue_.empty()) {
@@ -626,8 +647,9 @@ void Link::HandleFrame(uint8_t frameType, uint16_t firstSeq, uint16_t seq, uint1
 {
   ++recvFrames_;
 
+  lastRecvTime_ = MonotonicSeconds();
   if (SendWindowAck(ack)) {
-    lastAckTime_ = MonotonicSeconds();
+    lastAckTime_ = lastRecvTime_;
   }
   if (seq != kOobSeq) {
     lastAck_ = seq;

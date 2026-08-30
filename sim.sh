@@ -75,10 +75,12 @@ if [[ ! -d webots && $COZMO == "0" ]]; then
 	rm webots-R2021b-x86-64.tar.bz2
 fi
 
-cd "${TOPLEVEL}/simulator/controllers/vicBodyBridge"
-WEBOTS_HOME="${TOPLEVEL}/.sim/webots" make
-cd "${TOPLEVEL}/simulator/plugins/robot_windows/vicPanel"
-WEBOTS_HOME="${TOPLEVEL}/.sim/webots" make
+if [[ $COZMO == "0" ]]; then
+	cd "${TOPLEVEL}/simulator/controllers/vicBodyBridge"
+	WEBOTS_HOME="${TOPLEVEL}/.sim/webots" make
+	cd "${TOPLEVEL}/simulator/plugins/robot_windows/vicPanel"
+	WEBOTS_HOME="${TOPLEVEL}/.sim/webots" make
+fi
 if [[ $COZMO == "1" ]]; then
 	cd "${TOPLEVEL}/simulator/controllers/vicCozmoBridge"
 	make clean

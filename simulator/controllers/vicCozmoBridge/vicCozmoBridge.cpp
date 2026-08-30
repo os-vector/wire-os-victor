@@ -61,7 +61,6 @@ static const uint8_t  kProxStatusValid = 0x58;
 
 static const int kCamOutW = kCozmoCamWidth * 2;
 static const int kCamOutH = kCozmoCamHeight * 2;
-static const size_t kCamOutBytes = ((size_t)kCamOutW * kCamOutH * 3) / 2;
 
 static void RGBToYUV420sp(const uint8_t* rgb, uint8_t* yuv)
 {
