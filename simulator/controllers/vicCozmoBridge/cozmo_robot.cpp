@@ -268,13 +268,13 @@ void Robot::DisplayImage(const uint8_t* rle, size_t len)
   for (size_t i = 0; i < len; ++i) {
     w.U8(rle[i]);
   }
-  link_.SendCommand(kCmdDisplayImage, w);
+  link_.SendEvent(kCmdDisplayImage, w);
 }
 
 void Robot::OutputSilence()
 {
   const Writer empty;
-  link_.SendCommand(kCmdOutputSilence, empty);
+  link_.SendEvent(kCmdOutputSilence, empty);
 }
 
 void Robot::OutputAudio(const uint8_t* mulaw744)
@@ -283,7 +283,7 @@ void Robot::OutputAudio(const uint8_t* mulaw744)
   for (size_t i = 0; i < 744; ++i) {
     w.U8(mulaw744[i]);
   }
-  link_.SendCommand(kCmdOutputAudio, w);
+  link_.SendEvent(kCmdOutputAudio, w);
 }
 
 void Robot::SetRobotVolume(uint16_t level)

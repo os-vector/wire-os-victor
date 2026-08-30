@@ -43,7 +43,7 @@ namespace HeadController {
       f32 angleErrorSum_ = 0.f;
       f32 prevAngleError_ = 0.f;
       f32 prevHalPos_ = 0.f;
-#if defined(SIMULATOR) || defined(STANDALONE_SIM)
+#ifdef STANDALONE_SIM
       bool halPosSeeded_ = false;
 #endif
       bool inPosition_  = true;

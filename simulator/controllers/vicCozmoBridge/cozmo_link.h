@@ -150,6 +150,7 @@ public:
   uint64_t DiscardedFrames() const { return discardedFrames_; }
   uint64_t Timeouts() const { return timeouts_; }
   double Rto() const;
+  double AckWait() const;
   double RttMin() const { return rttCount_ ? rttMin_ : 0.0; }
   double RttMax() const { return rttMax_; }
   double RttAvg() const { return rttCount_ ? rttSum_ / (double)rttCount_ : 0.0; }
@@ -227,7 +228,7 @@ private:
   double srtt_;
   double rttvar_;
   bool rttInit_;
-  int rtoBackoff_;
+  double lastRecvTime_;
   double rttMin_;
   double rttMax_;
   double rttSum_;
