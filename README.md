@@ -176,7 +176,7 @@ sudo systemctl enable --now systemd-binfmt.service
 sudo systemctl restart systemd-binfmt.service
 
 # Debian / Ubuntu:
-sudo apt install qemu-user-static qemu-user-binfmt libasound2
+sudo apt install qemu-user-static qemu-user-binfmt libasound2-dev
 sudo systemctl restart systemd-binfmt.service
 
 # Fedora
