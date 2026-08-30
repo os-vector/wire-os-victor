@@ -14,11 +14,21 @@ void Init();
 
 void SetGripper(bool on);
 
-bool Exchange(const HeadToBody& headData);
+void SetMotorSetpoints(uint8_t valid);
+
+void SetHeadCommand(uint32_t seq, float angleRad, float speedRadPerSec,
+                    float accelRadPerSec2, float durationSec);
+
+void SetLiftCommand(uint32_t seq, float heightMm, float speedRadPerSec,
+                    float accelRadPerSec2, float durationSec);
+
+void SetWheelSetpoints(float leftMmps, float rightMmps);
+
+int Exchange(const HeadToBody& headData);
 
 const BodyToHead* LatestBody();
 
-bool LatestImu(HAL::IMU_DataStructure& imu);
+bool PopImu(HAL::IMU_DataStructure& imu);
 
 bool IsConnected();
 

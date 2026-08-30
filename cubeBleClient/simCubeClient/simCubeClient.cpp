@@ -5,6 +5,7 @@
 #include "clad/externalInterface/messageCubeToEngine.h"
 
 #include "vic_cube_protocol.h"
+#include "vic_net.h"
 
 extern "C" {
 uint8_t intensity[12];
@@ -12,13 +13,12 @@ uint8_t intensity[12];
 }
 
 #include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/un.h>
 #include <poll.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
 #include <cstring>
+#include <cstdlib>
 #include <chrono>
 
 namespace Anki {
@@ -37,33 +37,16 @@ SimCubeClient::~SimCubeClient()
   if (_thread.joinable()) {
     _thread.join();
   }
-  if (_connFd >= 0)   { close(_connFd); }
-  if (_listenFd >= 0) { close(_listenFd); }
+  if (_udpFd >= 0) { close(_udpFd); }
 }
 
 void SimCubeClient::Start()
 {
-  _listenFd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
-  if (_listenFd < 0) {
+  _udpFd = vicnet_udp_server(nullptr, VIC_NET_PORT_CUBE);
+  if (_udpFd < 0) {
     return;
   }
-  struct sockaddr_un addr;
-  memset(&addr, 0, sizeof(addr));
-  addr.sun_family = AF_UNIX;
-  strncpy(addr.sun_path, VIC_BRIDGE_CUBE_SOCK_PATH, sizeof(addr.sun_path) - 1);
-  unlink(VIC_BRIDGE_CUBE_SOCK_PATH);
-  if (bind(_listenFd, (struct sockaddr*)&addr, sizeof(addr)) < 0 ||
-      listen(_listenFd, 1) < 0) {
-    close(_listenFd);
-    _listenFd = -1;
-    return;
-  }
-  chmod(VIC_BRIDGE_CUBE_SOCK_PATH, 0777);
-  int fl = fcntl(_listenFd, F_GETFL, 0);
-  if (fl >= 0) { fcntl(_listenFd, F_SETFL, fl | O_NONBLOCK); }
-
   animation_init();
-
   _serverUp.store(true);
   _run.store(true);
   _thread = std::thread(&SimCubeClient::RunLoop, this);
@@ -113,18 +96,16 @@ bool SimCubeClient::Send(const std::vector<uint8_t>& data)
 
 void SimCubeClient::RunLoop()
 {
-  while (_run.load()) {
-    struct pollfd pfds[2];
-    int n = 0;
-    int listenIdx = -1, connIdx = -1;
-    if (_connFd < 0 && _listenFd >= 0) {
-      pfds[n].fd = _listenFd; pfds[n].events = POLLIN; pfds[n].revents = 0; listenIdx = n++;
-    }
-    if (_connFd >= 0) {
-      pfds[n].fd = _connFd; pfds[n].events = POLLIN; pfds[n].revents = 0; connIdx = n++;
-    }
+  struct sockaddr_storage peer;
+  socklen_t peerLen = 0;
+  bool havePeer = false;
+  double lastRx = -1.0;
 
-    const int pr = poll(pfds, n, 50 /*ms*/);
+  while (_run.load()) {
+    struct pollfd pfd;
+    pfd.fd = _udpFd; pfd.events = POLLIN; pfd.revents = 0;
+
+    const int pr = poll(&pfd, 1, 50 /*ms*/);
 
     // bound the scan even if no cube shows up, so the coordinator doesn't wait forever
     if (_scanning.load() && _scanDeadlineValid.load() && NowSec() >= _scanDeadline_sec.load()) {
@@ -151,34 +132,43 @@ void SimCubeClient::RunLoop()
           ledsChanged = true;
         }
       }
-      if (ledsChanged && _connFd >= 0) {
+      if (ledsChanged && havePeer) {
         VicCubeDown down;
         memset(&down, 0, sizeof(down));
         down.magic = VIC_CUBE_MAGIC;
         down.version = VIC_CUBE_VERSION;
         down.type = VIC_CUBE_MSG_LEDS;
         memcpy(down.rgb, _lastSentLeds, sizeof(down.rgb));
-        send(_connFd, &down, sizeof(down), MSG_NOSIGNAL | MSG_DONTWAIT);
+        sendto(_udpFd, &down, sizeof(down), MSG_NOSIGNAL | MSG_DONTWAIT,
+               (struct sockaddr*)&peer, peerLen);
       }
+    }
+
+    if (havePeer && NowSec() - lastRx > 3.0) {
+      havePeer = false;
+      _connectedToCube.store(false);
     }
 
     if (pr <= 0) {
       continue;
     }
 
-    if (listenIdx >= 0 && (pfds[listenIdx].revents & POLLIN)) {
-      const int fd = accept(_listenFd, nullptr, nullptr);
-      if (fd >= 0) {
-        int fl = fcntl(fd, F_GETFL, 0);
-        if (fl >= 0) { fcntl(fd, F_SETFL, fl | O_NONBLOCK); }
-        _connFd = fd;
-      }
-    }
-
-    if (connIdx >= 0 && (pfds[connIdx].revents & (POLLIN | POLLHUP | POLLERR))) {
+    if (pfd.revents & POLLIN) {
       for (;;) {
         VicCubeUp up;
-        const ssize_t r = recv(_connFd, &up, sizeof(up), 0);
+        struct sockaddr_storage src;
+        socklen_t srcLen = sizeof(src);
+        const ssize_t r = recvfrom(_udpFd, &up, sizeof(up), MSG_DONTWAIT,
+                                   (struct sockaddr*)&src, &srcLen);
+        if (r >= 0) {
+          peer = src;
+          peerLen = srcLen;
+          havePeer = true;
+          lastRx = NowSec();
+          if (r != (ssize_t)sizeof(up)) {
+            continue;
+          }
+        }
         if (r == (ssize_t)sizeof(up)) {
           if (up.magic != VIC_CUBE_MAGIC || up.version != VIC_CUBE_VERSION) {
             continue;
@@ -220,13 +210,6 @@ void SimCubeClient::RunLoop()
             }
           }
           continue;
-        }
-        if (r == 0) {
-          close(_connFd); _connFd = -1; _connectedToCube.store(false); break;
-        }
-        if (r < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) { break; }
-        if (r < 0) {
-          close(_connFd); _connFd = -1; _connectedToCube.store(false); break;
         }
         break;
       }

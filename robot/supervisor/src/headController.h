@@ -76,6 +76,8 @@ namespace Anki {
       void SetAngleRad(f32 angle);
 
       f32 GetLastCommandedAngle();
+
+      void GetLastCommand(u32& seq, f32& angle, f32& speed, f32& accel, f32& duration);
       
       // Returns the camera's pose with respect to the robot origin.
       // y is always 0 since head doesn't move laterally.

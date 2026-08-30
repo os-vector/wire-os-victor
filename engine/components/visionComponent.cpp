@@ -2652,10 +2652,11 @@ namespace Vector {
 #ifdef STANDALONE_SIM
       // fake calib
       {
+        const f32 focalLength = IsCozmoBody() ? 280.f : 320.f;
         auto calib = std::make_shared<Vision::CameraCalibration>(
-            (u16)360, (u16)640,   // nrows, ncols
-            320.f, 320.f,          // focalLength_x, focalLength_y
-            320.f, 180.f,          // center_x, center_y
+            DEFAULT_CAMERA_RESOLUTION_HEIGHT, DEFAULT_CAMERA_RESOLUTION_WIDTH,
+            focalLength, focalLength,
+            DEFAULT_CAMERA_RESOLUTION_WIDTH * 0.5f, DEFAULT_CAMERA_RESOLUTION_HEIGHT * 0.5f,
             0.f);                  // skew
         SetCameraCalibration(calib);
         CameraFOVInfo fovMsg(calib->ComputeHorizontalFOV().ToFloat(),

@@ -18,4 +18,8 @@ if [[ $TO_RUN == "" ]]; then
 	exit 1
 fi
 
+if [[ $COZMO == "1" ]]; then
+	export IS_COZMO=1
+fi
+
 chroot "${OSPATH}" /bin/bash -c "LD_LIBRARY_PATH=/anki/lib VIC_ANIM_CONFIG=/anki/etc/config/platform_config.json VIC_ENGINE_CONFIG=/anki/etc/config/platform_config.json ${TO_RUN}"

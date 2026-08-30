@@ -87,13 +87,6 @@ func randomString() string {
 
 func main() {
 	go mainGateway()
-	f, err := os.ReadFile("/run/vic-cloud/perRuntimeToken")
-	if err != nil {
-		token.PerRuntimeToken = randomString()
-		os.WriteFile("/run/vic-cloud/perRuntimeToken", []byte(token.PerRuntimeToken), 0777)
-	} else {
-		token.PerRuntimeToken = string(f)
-	}
 	var pool = rootcerts.ServerCertPool()
 	// load custom cert
 	// /anki/etc/wirepod-cert.crt

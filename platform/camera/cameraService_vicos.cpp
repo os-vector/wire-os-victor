@@ -31,11 +31,9 @@
 #include <unistd.h>
 
 #ifdef STANDALONE_SIM
-// Head-camera frame stream from the WeBots bridge (see vic_cam_protocol.h).
 #include "vic_cam_protocol.h"
+#include "vic_net.h"
 #include <sys/socket.h>
-#include <sys/un.h>
-#include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
 #include <cstring>
@@ -85,34 +83,15 @@ namespace Anki {
         if (_camServerFd >= 0) {
           return;
         }
-        int fd = socket(AF_UNIX, SOCK_STREAM, 0);
-        if (fd < 0) {
+        vicnet_sock_t fd = vicnet_tcp_server(nullptr, VIC_NET_PORT_CAM);
+        if (fd == VICNET_INVALID_SOCK) {
+          LOG_WARNING("WIRE camera TCP didn't bind", "port %d errno %d",
+                      VIC_NET_PORT_CAM, errno);
           return;
-        }
-        struct sockaddr_un addr;
-        memset(&addr, 0, sizeof(addr));
-        addr.sun_family = AF_UNIX;
-        strncpy(addr.sun_path, VIC_BRIDGE_CAM_SOCK_PATH, sizeof(addr.sun_path) - 1);
-        unlink(VIC_BRIDGE_CAM_SOCK_PATH); // clear a stale socket from a prior run
-        if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-          LOG_WARNING("WIRE camera sock didn't bind", "%s errno %d",
-                      VIC_BRIDGE_CAM_SOCK_PATH, errno);
-          close(fd);
-          return;
-        }
-        chmod(VIC_BRIDGE_CAM_SOCK_PATH, 0777);
-        if (listen(fd, 1) < 0) {
-          LOG_WARNING("WIRE camera sock not listening", "errno %d", errno);
-          close(fd);
-          return;
-        }
-        int flags = fcntl(fd, F_GETFL, 0);
-        if (flags >= 0) {
-          fcntl(fd, F_SETFL, flags | O_NONBLOCK);
         }
         _camServerFd = fd;
-        LOG_INFO("WIRE camera is now listening!!", "%s",
-                 VIC_BRIDGE_CAM_SOCK_PATH);
+        LOG_INFO("WIRE camera is now listening!!", "tcp port %d",
+                 VIC_NET_PORT_CAM);
       }
 
       void SimCameraServiceSocket()
@@ -148,11 +127,20 @@ namespace Anki {
               _camRxOff = 0;
               if (_camRxFrame.magic == VIC_CAM_MAGIC &&
                   _camRxFrame.version == VIC_CAM_VERSION) {
-                if (_camLatestYUV.size() != VIC_CAM_FRAME_BYTES) {
-                  _camLatestYUV.resize(VIC_CAM_FRAME_BYTES);
+                const size_t frameBytes =
+                  ((size_t)CAMERA_SENSOR_RESOLUTION_WIDTH * CAMERA_SENSOR_RESOLUTION_HEIGHT * 3) / 2;
+                if (_camRxFrame.width == CAMERA_SENSOR_RESOLUTION_WIDTH &&
+                    _camRxFrame.height == CAMERA_SENSOR_RESOLUTION_HEIGHT) {
+                  if (_camLatestYUV.size() != frameBytes) {
+                    _camLatestYUV.resize(frameBytes);
+                  }
+                  memcpy(_camLatestYUV.data(), _camRxFrame.yuv, frameBytes);
+                  _camHaveFrame = true;
+                } else {
+                  LOG_WARNING("WIRE cam size mismatch", "got %ux%u want %ux%u",
+                              _camRxFrame.width, _camRxFrame.height,
+                              CAMERA_SENSOR_RESOLUTION_WIDTH, CAMERA_SENSOR_RESOLUTION_HEIGHT);
                 }
-                memcpy(_camLatestYUV.data(), _camRxFrame.yuv, VIC_CAM_FRAME_BYTES);
-                _camHaveFrame = true;
               } else {
                 LOG_WARNING("WIRE bad magic", "magic mismatch");
                 close(_camClientFd);
@@ -447,7 +435,17 @@ namespace Anki {
     void CameraService::CameraSetParameters(u16 exposure_ms, f32 gain)
     {
 #ifdef STANDALONE_SIM
-      return;
+      {
+        std::lock_guard<std::mutex> lock(_lock);
+        if (_camClientFd >= 0) {
+          VicCamParams p;
+          p.magic = VIC_CAM_PARAMS_MAGIC;
+          p.exposureMs = exposure_ms;
+          p.gain = gain;
+          send(_camClientFd, &p, sizeof(p), MSG_NOSIGNAL);
+        }
+        return;
+      }
 #endif
       if(!IsCameraReady()) {
         return;
@@ -548,8 +546,8 @@ namespace Anki {
 
         SimCameraServiceSocket();
 
-        const s32 width  = VIC_CAM_WIDTH; // 1280
-        const s32 height = VIC_CAM_HEIGHT; // 720
+        const s32 width  = CAMERA_SENSOR_RESOLUTION_WIDTH;
+        const s32 height = CAMERA_SENSOR_RESOLUTION_HEIGHT;
         const size_t ySize = (size_t)width * height;
         const size_t frameSize = ySize + ySize / 2;
 

@@ -162,7 +162,29 @@ vdeploy
 
 This only works with a relatively beefy x86_64 Linux machine.
 
-To do this, follow the prereq instructions in "Bare Metal: x86_64 or arm64 Linux" in the above section, then run:
+To do this: 
+
+1. Follow the prereq instructions in "Bare Metal: x86_64 or arm64 Linux" in the above section
+
+2. Install qemu-static-arm and libasound2-dev, make sure systemd-binfmt is set up to handle ARM programs
+
+```
+# Arch:
+sudo pacman -S qemu-user-static qemu-user-static-binfmt alsa-lib
+sudo systemctl enable --now systemd-binfmt.service
+# if already enabled
+sudo systemctl restart systemd-binfmt.service
+
+# Debian / Ubuntu:
+sudo apt install qemu-user-static qemu-user-binfmt libasound2
+sudo systemctl restart systemd-binfmt.service
+
+# Fedora
+sudo dnf install qemu-user-static qemu-user-binfmt alsa-lib
+sudo systemctl restart systemd-binfmt.service
+```
+
+3. Run:
 
 ```
 ./sim.sh

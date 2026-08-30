@@ -17,13 +17,7 @@
 #include <webots/Camera.hpp>
 #include <webots/Keyboard.hpp>
 
-#include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/un.h>
-#include <poll.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <errno.h>
+#include "vic_net.h"
 #include <cstring>
 #include <cstdio>
 #include <cmath>
@@ -38,14 +32,100 @@
 #include <mutex>
 #include <atomic>
 
-#include <alsa/asoundlib.h>
+#define MA_NO_DECODING
+#define MA_NO_ENCODING
+#define MA_NO_GENERATION
+#define MINIAUDIO_IMPLEMENTATION
+#include "miniaudio.h"
 
 #include "vic_bridge_protocol.h"
 #include "vic_face_protocol.h"
 #include "vic_cam_protocol.h"
 #include "vic_cube_protocol.h"
+#include "vic_spkr_protocol.h"
 
 static const double PI = 3.14159265358979323846;
+
+static const char* NetHost()
+{
+  static const char* host = []() -> const char* {
+    const char* h = getenv("VIC_BRIDGE_HOST");
+    return (h != nullptr && h[0] != '\0') ? h : "127.0.0.1";
+  }();
+  return host;
+}
+
+#define VSOCK_OK(s) ((s) != VICNET_INVALID_SOCK)
+
+static double WallNow()
+{
+  using namespace std::chrono;
+  return duration<double>(steady_clock::now().time_since_epoch()).count();
+}
+
+static std::mutex micMutex;
+static std::deque<int16_t> micRing;
+static const size_t kMicRingMax = 16000 / 5;
+
+static void MicCaptureCB(ma_device*, void*, const void* input, ma_uint32 frames)
+{
+  const int16_t* in = (const int16_t*)input;
+  std::lock_guard<std::mutex> lk(micMutex);
+  for (ma_uint32 i = 0; i < frames; ++i) micRing.push_back(in[i]);
+  while (micRing.size() > kMicRingMax) micRing.pop_front();
+}
+
+static std::mutex spkMutex;
+static std::deque<int16_t> spkRing;
+static bool spkPrimed = false;
+static const size_t kSpkPrime   = VIC_SPKR_SAMPLE_RATE * 96 / 1000;
+static const size_t kSpkRingMax = VIC_SPKR_SAMPLE_RATE * 250 / 1000;
+
+static void SpkPlaybackCB(ma_device*, void* output, const void*, ma_uint32 frames)
+{
+  int16_t* out = (int16_t*)output;
+  std::lock_guard<std::mutex> lk(spkMutex);
+  if (!spkPrimed) {
+    if (spkRing.size() >= kSpkPrime) {
+      spkPrimed = true;
+    } else {
+      memset(out, 0, frames * sizeof(int16_t));
+      return;
+    }
+  }
+  for (ma_uint32 i = 0; i < frames; ++i) {
+    if (spkRing.empty()) {
+      out[i] = 0;
+    } else {
+      out[i] = spkRing.front();
+      spkRing.pop_front();
+    }
+  }
+  if (spkRing.empty()) {
+    spkPrimed = false;
+  }
+}
+
+static std::atomic<bool> spkRxRun{false};
+static void SpkRxLoop(vicnet_sock_t spkSock)
+{
+  static VicSpkrChunk chunk;
+  while (spkRxRun.load()) {
+    if (vicnet_poll_in(spkSock, 200) <= 0) continue;
+    for (;;) {
+      const ssize_t r = recv(spkSock, (char*)&chunk, sizeof(chunk), MSG_DONTWAIT);
+      if (r < (ssize_t)(sizeof(chunk) - sizeof(chunk.samples))) break;
+      if (chunk.magic != VIC_SPKR_MAGIC || chunk.version != VIC_SPKR_VERSION) continue;
+      uint32_t n = chunk.nsamples;
+      if (n > VIC_SPKR_CHUNK) n = VIC_SPKR_CHUNK;
+      std::lock_guard<std::mutex> lk(spkMutex);
+      for (uint32_t i = 0; i < n; ++i) spkRing.push_back(chunk.samples[i]);
+      if (spkRing.size() > kSpkRingMax) {
+        while (spkRing.size() > kSpkPrime) spkRing.pop_front();
+      }
+    }
+  }
+}
 
 static const double HAL_MOTOR_POSITION_SCALE[MOTOR_COUNT] = {
   ((       0.96 * 29.0 * 0.25 * PI) / 172.3),
@@ -162,6 +242,7 @@ static bool CubeCheckForTap(float ax, float ay, float az, int stepMs)
 
 int main(int, char**)
 {
+  vicnet_init();
   webots::Supervisor robot;
   const int timeStepMs = (int)robot.getBasicTimeStep();
   const double dtSec = timeStepMs / 1000.0;
@@ -213,22 +294,7 @@ int main(int, char**)
   webots::Connector* gripperConnector = robot.getConnector("gripperConnector");
   bool gripperWasLocked = false;
 
-  int panelSock = socket(AF_UNIX, SOCK_DGRAM, 0);
-  if (panelSock >= 0) {
-    struct sockaddr_un paddr;
-    memset(&paddr, 0, sizeof(paddr));
-    paddr.sun_family = AF_UNIX;
-    strncpy(paddr.sun_path, "/tmp/vector_panel.sock", sizeof(paddr.sun_path) - 1);
-    unlink(paddr.sun_path);
-    if (bind(panelSock, (struct sockaddr*)&paddr, sizeof(paddr)) < 0) {
-      close(panelSock);
-      panelSock = -1;
-    } else {
-      chmod(paddr.sun_path, 0777);
-      int pfl = fcntl(panelSock, F_GETFL, 0);
-      if (pfl >= 0) fcntl(panelSock, F_SETFL, pfl | O_NONBLOCK);
-    }
-  }
+  vicnet_sock_t panelSock = vicnet_udp_server("127.0.0.1", VIC_NET_PORT_PANEL);
   struct PanelAxis {
     int val = 0;
     int lastNonzero = 0;
@@ -263,75 +329,57 @@ int main(int, char**)
 
   const bool micLive = true;
 
-  std::mutex micMutex;
-  std::deque<int16_t> micRing;
-  const size_t kMicRingMax = 16000 / 5; // ~200ms
-  std::atomic<bool> micCaptureRun{false};
-  std::thread micThread;
-
   webots::Keyboard* keyboard = robot.getKeyboard();
   if (keyboard) keyboard->enable(timeStepMs);
 
+  ma_device micDev;
+  bool micDevOk = false;
   if (micLive) {
-    micCaptureRun.store(true);
-    micThread = std::thread([&]() {
-      const char* dev = getenv("VIC_MIC_DEV");
-      if (!dev) dev = "default";
-      snd_pcm_t* pcm = nullptr;
-      int err = snd_pcm_open(&pcm, dev, SND_PCM_STREAM_CAPTURE, 0);
-      if (err < 0) {
-        return;
-      }
-      snd_pcm_hw_params_t* hw;
-      snd_pcm_hw_params_alloca(&hw);
-      snd_pcm_hw_params_any(pcm, hw);
-      snd_pcm_hw_params_set_access(pcm, hw, SND_PCM_ACCESS_RW_INTERLEAVED);
-      snd_pcm_hw_params_set_format(pcm, hw, SND_PCM_FORMAT_S16_LE);
-      snd_pcm_hw_params_set_channels(pcm, hw, 1);
-      unsigned int rate = 16000;
-      snd_pcm_hw_params_set_rate_near(pcm, hw, &rate, 0);
-      snd_pcm_uframes_t period = 160;
-      snd_pcm_hw_params_set_period_size_near(pcm, hw, &period, 0);
-      err = snd_pcm_hw_params(pcm, hw);
-      if (err < 0) {
-        snd_pcm_close(pcm);
-        return;
-      }
-      std::vector<int16_t> buf(period);
-      while (micCaptureRun.load()) {
-        snd_pcm_sframes_t n = snd_pcm_readi(pcm, buf.data(), period);
-        if (n < 0) { snd_pcm_recover(pcm, (int)n, 1); continue; }
-        if (n > 0) {
-          std::lock_guard<std::mutex> lk(micMutex);
-          for (snd_pcm_sframes_t i = 0; i < n; ++i) micRing.push_back(buf[(size_t)i]);
-          while (micRing.size() > kMicRingMax) micRing.pop_front();
-        }
-      }
-      snd_pcm_close(pcm);
-    });
+    ma_device_config cfg = ma_device_config_init(ma_device_type_capture);
+    cfg.capture.format = ma_format_s16;
+    cfg.capture.channels = 1;
+    cfg.sampleRate = 16000;
+    cfg.periodSizeInFrames = 160;
+    cfg.dataCallback = MicCaptureCB;
+    if (ma_device_init(NULL, &cfg, &micDev) == MA_SUCCESS &&
+        ma_device_start(&micDev) == MA_SUCCESS) {
+      micDevOk = true;
+    } else {
+      printf("mic capture unavailable\n");
+      fflush(stdout);
+    }
   }
 
-  int sock = -1;
-  int lastConnectErrno = 0;
-  auto tryConnect = [&]() {
-    if (sock >= 0) return;
-    int fd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
-    if (fd < 0) {
-      return;
-    }
-    struct sockaddr_un addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, VIC_BRIDGE_BODY_SOCK_PATH, sizeof(addr.sun_path) - 1);
-    if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) == 0) {
-      int flags = fcntl(fd, F_GETFL, 0);
-      if (flags >= 0) fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-      sock = fd;
-      lastConnectErrno = 0;
+  vicnet_sock_t spkSock = VICNET_INVALID_SOCK;
+  ma_device spkDev;
+  bool spkDevOk = false;
+  std::thread spkRxThread;
+  {
+    spkSock = vicnet_udp_server(NULL, VIC_NET_PORT_SPKR);
+    ma_device_config cfg = ma_device_config_init(ma_device_type_playback);
+    cfg.playback.format = ma_format_s16;
+    cfg.playback.channels = 1;
+    cfg.sampleRate = VIC_SPKR_SAMPLE_RATE;
+    cfg.dataCallback = SpkPlaybackCB;
+    if (VSOCK_OK(spkSock) &&
+        ma_device_init(NULL, &cfg, &spkDev) == MA_SUCCESS &&
+        ma_device_start(&spkDev) == MA_SUCCESS) {
+      spkDevOk = true;
+      spkRxRun.store(true);
+      spkRxThread = std::thread(SpkRxLoop, spkSock);
     } else {
-      close(fd);
+      printf("speaker playback unavailable\n");
+      fflush(stdout);
     }
+  }
+
+  vicnet_sock_t sock = VICNET_INVALID_SOCK;
+  auto tryConnect = [&]() {
+    if (VSOCK_OK(sock)) return;
+    sock = vicnet_udp_client(NetHost(), VIC_NET_PORT_BODY);
   };
+  bool bodyAlive = false;
+  double lastCmdWall = -1.0;
 
   int32_t prevCount[MOTOR_COUNT] = {0};
   uint32_t ticksSinceChange[MOTOR_COUNT] = {0};
@@ -348,17 +396,19 @@ int main(int, char**)
   int imuHistIdx = 0;
   bool imuHistFull = false;
 
-  int faceSock = -1;
+  vicnet_sock_t faceSock = VICNET_INVALID_SOCK;
   double lastFaceConnect = -1.0;
+  double lastFaceHello = -1.0;
 
-  int camSock = -1;
+  vicnet_sock_t camSock = VICNET_INVALID_SOCK;
   double lastCamConnect = -1.0;
   static VicCamFrame camTx;
   size_t camTxOff = sizeof(camTx);
   uint32_t camSeq = 0;
   long stepIndex = 0;
 
-  int cubeSock = -1;
+  vicnet_sock_t cubeSock = VICNET_INVALID_SOCK;
+  double lastCubeHello = -1.0;
   double lastCubeConnect = -1.0;
   double lastCubeScan = -1.0;
   webots::Node* cubeNode = nullptr;
@@ -374,7 +424,7 @@ int main(int, char**)
   const double simStart = robot.getTime();
 
   while (true) {
-    if (sock < 0) {
+    if (!VSOCK_OK(sock)) {
       double now = robot.getTime();
       if (now - lastConnectAttempt >= 0.25) {
         lastConnectAttempt = now;
@@ -384,45 +434,48 @@ int main(int, char**)
 
     VicBridgeH2B cmd;
     bool haveCmd = false;
-    while (sock >= 0 && !haveCmd) {
-      struct pollfd pfd;
-      pfd.fd = sock; pfd.events = POLLIN; pfd.revents = 0;
-      int pr = poll(&pfd, 1, 500);
-      if (pr == 0) continue;
-      if (pr < 0) { if (errno == EINTR) continue; close(sock); sock = -1; break; }
-      if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL)) {
-        close(sock); sock = -1; break;
+    while (VSOCK_OK(sock) && !haveCmd) {
+      const int pollMs = bodyAlive ? 500 : 0;
+      int pr = vicnet_poll_in(sock, pollMs);
+      if (pr == 0) {
+        if (!bodyAlive) break;
+        if (WallNow() - lastCmdWall > 1.0) {
+          bodyAlive = false;
+          printf("brain lost\n");
+          fflush(stdout);
+          break;
+        }
+        continue;
       }
-      ssize_t r = recv(sock, &cmd, sizeof(cmd), 0);
+      if (pr < 0) {
+        if (errno == EINTR) continue;
+        continue;
+      }
+      ssize_t r = recv(sock, (char*)&cmd, sizeof(cmd), 0);
       if (r == (ssize_t)sizeof(cmd)) {
         if (cmd.magic == VIC_BRIDGE_MAGIC && cmd.version == VIC_BRIDGE_PROTO_VERSION) {
           haveCmd = true;
+          if (!bodyAlive) { printf("brain found\n"); fflush(stdout); }
+          bodyAlive = true;
+          lastCmdWall = WallNow();
         }
         continue;
       }
-      if (r == 0) {
-        printf("brain disconnected\n");
-        fflush(stdout);
-        close(sock); sock = -1; break;
-      }
-      if (r < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) continue;
-      if (r < 0) { close(sock); sock = -1; break; }
+      if (r < 0 && vicnet_would_block() && !bodyAlive) break;
+      continue;
     }
 
-    while (haveCmd && sock >= 0) {
+    while (haveCmd && VSOCK_OK(sock)) {
       VicBridgeH2B next;
-      const ssize_t r = recv(sock, &next, sizeof(next), MSG_DONTWAIT);
+      const ssize_t r = recv(sock, (char*)&next, sizeof(next), MSG_DONTWAIT);
       if (r == (ssize_t)sizeof(next)) {
         if (next.magic == VIC_BRIDGE_MAGIC && next.version == VIC_BRIDGE_PROTO_VERSION) {
           cmd = next;
+          lastCmdWall = WallNow();
         }
         continue;
       }
-      if (r == 0) {
-        printf("brain disconnected\n");
-        fflush(stdout);
-        close(sock); sock = -1;
-      }
+      if (r == 0) continue;
       break;
     }
 
@@ -619,51 +672,44 @@ int main(int, char**)
       out.imu.temperature_degC = (float)(70.0 - (70.0 - 20.0) * exp(-0.0032 * t));
     }
 
-    if (sock >= 0) {
-      ssize_t w = send(sock, &out, sizeof(out), MSG_NOSIGNAL);
-      if (w < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-        close(sock); sock = -1;
-      }
+    if (VSOCK_OK(sock)) {
+      send(sock, (const char*)&out, sizeof(out), MSG_NOSIGNAL);
     }
 
     if (faceDisplay != nullptr) {
-      if (faceSock < 0) {
+      if (!VSOCK_OK(faceSock)) {
         double now = robot.getTime();
         if (now - lastFaceConnect >= 0.25) {
           lastFaceConnect = now;
-          int fd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
-          if (fd >= 0) {
-            struct sockaddr_un addr;
-            memset(&addr, 0, sizeof(addr));
-            addr.sun_family = AF_UNIX;
-            strncpy(addr.sun_path, VIC_BRIDGE_FACE_SOCK_PATH, sizeof(addr.sun_path) - 1);
-            if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) == 0) {
-              int rcvbuf = 256 * 1024;
-              setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
-              int fl = fcntl(fd, F_GETFL, 0);
-              if (fl >= 0) fcntl(fd, F_SETFL, fl | O_NONBLOCK);
-              faceSock = fd;
-              printf("connected to %s\n", VIC_BRIDGE_FACE_SOCK_PATH);
-              fflush(stdout);
-            } else {
-              close(fd);
-            }
+          vicnet_sock_t fd = vicnet_udp_client(NetHost(), VIC_NET_PORT_FACE);
+          if (VSOCK_OK(fd)) {
+            int rcvbuf = 256 * 1024;
+            setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (const char*)&rcvbuf, sizeof(rcvbuf));
+            faceSock = fd;
+            printf("face channel up\n");
+            fflush(stdout);
           }
         }
       }
-      if (faceSock >= 0) {
+      if (VSOCK_OK(faceSock)) {
+        const double now = robot.getTime();
+        if (now - lastFaceHello >= 1.0) {
+          lastFaceHello = now;
+          VicNetHello hello = { VIC_NET_HELLO_MAGIC, VIC_NET_PORT_FACE };
+          send(faceSock, (const char*)&hello, sizeof(hello), MSG_NOSIGNAL);
+        }
+      }
+      if (VSOCK_OK(faceSock)) {
         static VicFaceFrame ff;
         bool haveFace = false;
         for (;;) {
-          ssize_t r = recv(faceSock, &ff, sizeof(ff), 0);
+          ssize_t r = recv(faceSock, (char*)&ff, sizeof(ff), 0);
           if (r == (ssize_t)sizeof(ff) &&
               ff.magic == VIC_FACE_MAGIC && ff.version == VIC_FACE_VERSION) {
             haveFace = true;
             continue;
           }
-          if (r < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) break;
-          if (r == 0 || r < 0) { close(faceSock); faceSock = -1; break; }
-          break;
+          if (r < 0) break;
         }
         if (haveFace) {
           static unsigned int bgra[VIC_FACE_NPIX];
@@ -683,33 +729,23 @@ int main(int, char**)
     }
 
     if (headCam != nullptr) {
-      if (camSock < 0) {
+      if (!VSOCK_OK(camSock)) {
         double now = robot.getTime();
         if (now - lastCamConnect >= 0.25) {
           lastCamConnect = now;
-          int fd = socket(AF_UNIX, SOCK_STREAM, 0);
-          if (fd >= 0) {
-            struct sockaddr_un addr;
-            memset(&addr, 0, sizeof(addr));
-            addr.sun_family = AF_UNIX;
-            strncpy(addr.sun_path, VIC_BRIDGE_CAM_SOCK_PATH, sizeof(addr.sun_path) - 1);
-            if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) == 0) {
-              int sndbuf = 2 * 1024 * 1024;
-              setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &sndbuf, sizeof(sndbuf));
-              int fl = fcntl(fd, F_GETFL, 0);
-              if (fl >= 0) fcntl(fd, F_SETFL, fl | O_NONBLOCK);
-              camSock = fd;
-              camTxOff = sizeof(camTx);
-              printf("connected to %s\n", VIC_BRIDGE_CAM_SOCK_PATH);
-              fflush(stdout);
-            } else {
-              close(fd);
-            }
+          vicnet_sock_t fd = vicnet_tcp_client(NetHost(), VIC_NET_PORT_CAM);
+          if (VSOCK_OK(fd)) {
+            int sndbuf = 2 * 1024 * 1024;
+            setsockopt(fd, SOL_SOCKET, SO_SNDBUF, (const char*)&sndbuf, sizeof(sndbuf));
+            camSock = fd;
+            camTxOff = sizeof(camTx);
+            printf("cam channel up\n");
+            fflush(stdout);
           }
         }
       }
 
-      if (camSock >= 0) {
+      if (VSOCK_OK(camSock)) {
         if (camTxOff >= sizeof(camTx) && (stepIndex % camStepMult) == 0) {
           const unsigned char* img = headCam->getImage();
           if (img != nullptr) {
@@ -725,16 +761,16 @@ int main(int, char**)
         }
         if (camTxOff < sizeof(camTx)) {
           for (;;) {
-            ssize_t w = send(camSock, (uint8_t*)&camTx + camTxOff,
+            ssize_t w = send(camSock, (const char*)&camTx + camTxOff,
                              sizeof(camTx) - camTxOff, MSG_NOSIGNAL);
             if (w > 0) {
               camTxOff += (size_t)w;
               if (camTxOff >= sizeof(camTx)) break;
               continue;
             }
-            if (w < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) break;
-            close(camSock);
-            camSock = -1;
+            if (w < 0 && vicnet_would_block()) break;
+            vicnet_close(camSock);
+            camSock = VICNET_INVALID_SOCK;
             camTxOff = sizeof(camTx);
             break;
           }
@@ -743,7 +779,7 @@ int main(int, char**)
     }
     ++stepIndex;
 
-    if (panelSock >= 0) {
+    if (VSOCK_OK(panelSock)) {
       char pbuf[64];
       ssize_t pr;
       while ((pr = recv(panelSock, pbuf, sizeof(pbuf) - 1, MSG_DONTWAIT)) > 0) {
@@ -774,30 +810,25 @@ int main(int, char**)
       }
     }
 
-    if (cubeSock < 0) {
+    if (!VSOCK_OK(cubeSock)) {
       const double now = robot.getTime();
       if (now - lastCubeConnect >= 0.25) {
         lastCubeConnect = now;
-        int fd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
-        if (fd >= 0) {
-          struct sockaddr_un caddr;
-          memset(&caddr, 0, sizeof(caddr));
-          caddr.sun_family = AF_UNIX;
-          strncpy(caddr.sun_path, VIC_BRIDGE_CUBE_SOCK_PATH, sizeof(caddr.sun_path) - 1);
-          if (connect(fd, (struct sockaddr*)&caddr, sizeof(caddr)) == 0) {
-            int fl = fcntl(fd, F_GETFL, 0);
-            if (fl >= 0) { fcntl(fd, F_SETFL, fl | O_NONBLOCK); }
-            cubeSock = fd;
-          } else {
-            close(fd);
-          }
-        }
+        cubeSock = vicnet_udp_client(NetHost(), VIC_NET_PORT_CUBE);
       }
     }
-    if (cubeSock >= 0) {
+    if (VSOCK_OK(cubeSock)) {
+      const double now = robot.getTime();
+      if (now - lastCubeHello >= 1.0) {
+        lastCubeHello = now;
+        VicNetHello hello = { VIC_NET_HELLO_MAGIC, VIC_NET_PORT_CUBE };
+        send(cubeSock, (const char*)&hello, sizeof(hello), MSG_NOSIGNAL);
+      }
+    }
+    if (VSOCK_OK(cubeSock)) {
       for (;;) {
         VicCubeDown down;
-        const ssize_t r = recv(cubeSock, &down, sizeof(down), MSG_DONTWAIT);
+        const ssize_t r = recv(cubeSock, (char*)&down, sizeof(down), MSG_DONTWAIT);
         if (r == (ssize_t)sizeof(down)) {
           if (down.magic == VIC_CUBE_MAGIC && down.version == VIC_CUBE_VERSION &&
               down.type == VIC_CUBE_MSG_LEDS) {
@@ -806,13 +837,11 @@ int main(int, char**)
           }
           continue;
         }
-        if (r == 0) {
-          close(cubeSock); cubeSock = -1; cubeNode = nullptr; cubeHaveVel = false;
-        }
+        if (r == 0) continue;
         break;
       }
     }
-    if (cubeSock >= 0) {
+    if (VSOCK_OK(cubeSock)) {
       if (cubeNode == nullptr) {
         const double now = robot.getTime();
         if (now - lastCubeScan >= 0.5) {
@@ -865,7 +894,7 @@ int main(int, char**)
 
           if ((cubeAdvCtr++ % 200) == 0) {
             up.type = VIC_CUBE_MSG_ADVERTISE;
-            send(cubeSock, &up, sizeof(up), MSG_NOSIGNAL | MSG_DONTWAIT);
+            send(cubeSock, (const char*)&up, sizeof(up), MSG_NOSIGNAL | MSG_DONTWAIT);
           }
 
           up.type = VIC_CUBE_MSG_ACCEL;
@@ -883,10 +912,7 @@ int main(int, char**)
           const double volts = bv ? bv->getSFFloat() : 1.5;
           up.railVoltageCnts = (uint16_t)(volts * 1024.0 / 3.6);
 
-          const ssize_t w = send(cubeSock, &up, sizeof(up), MSG_NOSIGNAL | MSG_DONTWAIT);
-          if (w < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-            close(cubeSock); cubeSock = -1; cubeNode = nullptr; cubeHaveVel = false;
-          }
+          send(cubeSock, (const char*)&up, sizeof(up), MSG_NOSIGNAL | MSG_DONTWAIT);
         }
       }
     }
@@ -904,10 +930,13 @@ int main(int, char**)
     }
   }
 
-  if (micThread.joinable()) {
-    micCaptureRun.store(false);
-    micThread.join();
+  if (micDevOk) ma_device_uninit(&micDev);
+  if (spkDevOk) ma_device_uninit(&spkDev);
+  if (spkRxThread.joinable()) {
+    spkRxRun.store(false);
+    spkRxThread.join();
   }
-  if (sock >= 0) close(sock);
+  if (VSOCK_OK(spkSock)) vicnet_close(spkSock);
+  if (VSOCK_OK(sock)) vicnet_close(sock);
   return 0;
 }

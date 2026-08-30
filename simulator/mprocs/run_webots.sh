@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# exit 0
+
 SCRIPT_PATH=$(dirname $([ -L $0 ] && echo "$(dirname $0)/$(readlink -n $0)" || echo $0))
 SCRIPT_NAME=`basename ${0}`
 TOPLEVEL=$(cd "$SCRIPT_PATH/../.." && pwd)

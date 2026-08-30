@@ -586,6 +586,38 @@ namespace Anki {
         HeadController::Update();
         LiftController::Update();
 
+#ifdef STANDALONE_SIM
+        {
+          u8 valid = 0;
+          if (HeadController::IsCalibrated() && !HeadController::IsCalibrating()) {
+            valid |= HAL::MOTOR_SETPOINT_HEAD;
+          }
+          if (LiftController::IsCalibrated() && !LiftController::IsCalibrating()) {
+            valid |= HAL::MOTOR_SETPOINT_LIFT;
+          }
+          valid |= HAL::MOTOR_SETPOINT_WHEELS;
+          if (IsCozmoBody()) {
+            u32 seq = 0;
+            f32 angle = 0.f;
+            f32 speed = 0.f;
+            f32 accel = 0.f;
+            f32 duration = 0.f;
+            HeadController::GetLastCommand(seq, angle, speed, accel, duration);
+            HAL::SetHeadCommand(seq, angle, speed, accel, duration);
+          }
+          if (IsCozmoBody()) {
+            u32 seq = 0;
+            f32 height = 0.f;
+            f32 speed = 0.f;
+            f32 accel = 0.f;
+            f32 duration = 0.f;
+            LiftController::GetLastCommand(seq, height, speed, accel, duration);
+            HAL::SetLiftCommand(seq, height, speed, accel, duration);
+          }
+          HAL::SetMotorSetpoints(valid);
+        }
+#endif
+
         MARK_NEXT_TIME_PROFILE(CozmoBot, LIGHTS);
         BackpackLightController::Update();
 
@@ -598,6 +630,15 @@ namespace Anki {
         SpeedController::Manage();
         SteeringController::Manage();
         WheelController::Manage();
+
+#ifdef STANDALONE_SIM
+        {
+          f32 leftMmps = 0.f;
+          f32 rightMmps = 0.f;
+          WheelController::GetDesiredWheelSpeeds(leftMmps, rightMmps);
+          HAL::SetWheelSetpoints(leftMmps, rightMmps);
+        }
+#endif
 
         //////////////////////////////////////////////////////////////
         // Power management

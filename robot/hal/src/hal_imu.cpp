@@ -228,6 +228,12 @@ void StopIMU()
 bool HAL::IMUReadData(HAL::IMU_DataStructure &imuData)
 {
 #ifdef STANDALONE_SIM
+  if (SimBodyBridge::PopImu(imuData)) {
+    return true;
+  }
+  if (SimBodyBridge::IsConnected()) {
+    return false;
+  }
   static TimeStamp_t lastIMURead = 0;
   const TimeStamp_t now = HAL::GetTimeStamp();
   if (now - lastIMURead < 5) {
@@ -235,10 +241,8 @@ bool HAL::IMUReadData(HAL::IMU_DataStructure &imuData)
   }
   lastIMURead = now;
   imuData = {};
-  if (!SimBodyBridge::LatestImu(imuData)) {
-    imuData.accel[2] = 9800.f;
-    imuData.temperature_degC = 25.f;
-  }
+  imuData.accel[2] = 9800.f;
+  imuData.temperature_degC = 25.f;
   return true;
 #elif(0) // For faking IMU data
   while (PopIMU(imuData)) {}; // Just to pop queue

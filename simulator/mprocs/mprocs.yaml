@@ -1,8 +1,6 @@
 procs:
   webots:
     shell: "bash simulator/mprocs/run_webots.sh"
-  alsa:
-    shell: "bash simulator/mprocs/run_alsa.sh"
   robot:
     shell: "sleep 1 && bash simulator/mprocs/run_chroot.sh /anki/bin/vic-robot"
   engine:

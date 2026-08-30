@@ -1,0 +1,6 @@
+//go:build vicos
+// +build vicos
+
+package main
+
+const hasSwitchboard = true

@@ -4,80 +4,95 @@
 #include "anki/cozmo/robot/logging.h"
 
 #include "vic_bridge_protocol.h"
+#include "vic_net.h"
 
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <sys/stat.h>
 #include <poll.h>
 #include <unistd.h>
-#include <fcntl.h>
 #include <errno.h>
+#include <time.h>
 #include <cstring>
+#include <cstdlib>
+#include <deque>
 
 namespace Anki {
 namespace Vector {
 namespace SimBodyBridge {
 
 namespace {
-  int listenFd_ = -1;
-  int connFd_   = -1;
+  int udpFd_ = -1;
   uint32_t txSeq_ = 0;
+
+  struct sockaddr_storage peer_;
+  socklen_t peerLen_ = 0;
+  bool havePeer_ = false;
+  double lastRx_ = -1.0;
 
   bool haveBody_ = false;
   VicBridgeB2H latest_ = {};
 
-  bool gripperOn_ = false;
+  std::deque<VicBridgeImu> imuQueue_;
+  const size_t kMaxImuQueue = 8;
 
-  void SetNonBlocking(int fd) {
-    int flags = fcntl(fd, F_GETFL, 0);
-    if (flags >= 0) {
-      fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-    }
+  bool gripperOn_ = false;
+  uint8_t setpointValid_ = 0;
+  uint32_t headCmdSeq_ = 0;
+  float headCmdAngleRad_ = 0.f;
+  float headCmdSpeedRadPerSec_ = 0.f;
+  float headCmdAccelRadPerSec2_ = 0.f;
+  float headCmdDurationSec_ = 0.f;
+  uint32_t liftCmdSeq_ = 0;
+  float liftCmdHeightMm_ = 0.f;
+  float liftCmdSpeedRadPerSec_ = 0.f;
+  float liftCmdAccelRadPerSec2_ = 0.f;
+  float liftCmdDurationSec_ = 0.f;
+  float desiredLeftWheelMmps_ = 0.f;
+  float desiredRightWheelMmps_ = 0.f;
+
+  double MonoNow() {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (double)ts.tv_sec + (double)ts.tv_nsec * 1e-9;
   }
 
-  void TryAccept() {
-    if (connFd_ >= 0 || listenFd_ < 0) {
-      return;
+  int DrainUdp() {
+    int gotFresh = 0;
+    for (;;) {
+      VicBridgeB2H frame;
+      struct sockaddr_storage src;
+      socklen_t srcLen = sizeof(src);
+      const ssize_t r = recvfrom(udpFd_, &frame, sizeof(frame), MSG_DONTWAIT,
+                                 (struct sockaddr*)&src, &srcLen);
+      if (r < 0) {
+        break;
+      }
+      peer_ = src;
+      peerLen_ = srcLen;
+      havePeer_ = true;
+      lastRx_ = MonoNow();
+      if (r == (ssize_t)sizeof(frame) &&
+          frame.magic == VIC_BRIDGE_MAGIC && frame.version == VIC_BRIDGE_PROTO_VERSION) {
+        latest_ = frame;
+        haveBody_ = true;
+        ++gotFresh;
+        imuQueue_.push_back(frame.imu);
+        while (imuQueue_.size() > kMaxImuQueue) {
+          imuQueue_.pop_front();
+        }
+      }
     }
-    int fd = accept(listenFd_, nullptr, nullptr);
-    if (fd >= 0) {
-      SetNonBlocking(fd);
-      connFd_ = fd;
+    if (havePeer_ && MonoNow() - lastRx_ > 1.0) {
+      havePeer_ = false;
     }
+    return gotFresh;
   }
 }
 
 void Init()
 {
-  listenFd_ = socket(AF_UNIX, SOCK_SEQPACKET, 0);
-  if (listenFd_ < 0) {
-    return;
+  udpFd_ = vicnet_udp_server(nullptr, VIC_NET_PORT_BODY);
+  if (udpFd_ < 0) {
+    AnkiWarn("WIRE body UDP bind failed", "port %d", VIC_NET_PORT_BODY);
   }
-
-  struct sockaddr_un addr;
-  memset(&addr, 0, sizeof(addr));
-  addr.sun_family = AF_UNIX;
-  strncpy(addr.sun_path, VIC_BRIDGE_BODY_SOCK_PATH, sizeof(addr.sun_path) - 1);
-
-  unlink(VIC_BRIDGE_BODY_SOCK_PATH);
-
-  if (bind(listenFd_, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-    close(listenFd_);
-    listenFd_ = -1;
-    return;
-  }
-
-  if (listen(listenFd_, 1) < 0) {
-    close(listenFd_);
-    listenFd_ = -1;
-    return;
-  }
-
-  if (chmod(VIC_BRIDGE_BODY_SOCK_PATH, 0777) < 0) {
-    AnkiWarn("WIRE CAN'T CHMOD BODY THING", "BLA");
-  }
-
-  SetNonBlocking(listenFd_);
 }
 
 void SetGripper(bool on)
@@ -85,11 +100,41 @@ void SetGripper(bool on)
   gripperOn_ = on;
 }
 
-bool Exchange(const HeadToBody& headData)
+void SetMotorSetpoints(uint8_t valid)
 {
-  TryAccept();
-  if (connFd_ < 0) {
-    return false;
+  setpointValid_ = valid;
+}
+
+void SetHeadCommand(uint32_t seq, float angleRad, float speedRadPerSec,
+                    float accelRadPerSec2, float durationSec)
+{
+  headCmdSeq_ = seq;
+  headCmdAngleRad_ = angleRad;
+  headCmdSpeedRadPerSec_ = speedRadPerSec;
+  headCmdAccelRadPerSec2_ = accelRadPerSec2;
+  headCmdDurationSec_ = durationSec;
+}
+
+void SetLiftCommand(uint32_t seq, float heightMm, float speedRadPerSec,
+                    float accelRadPerSec2, float durationSec)
+{
+  liftCmdSeq_ = seq;
+  liftCmdHeightMm_ = heightMm;
+  liftCmdSpeedRadPerSec_ = speedRadPerSec;
+  liftCmdAccelRadPerSec2_ = accelRadPerSec2;
+  liftCmdDurationSec_ = durationSec;
+}
+
+void SetWheelSetpoints(float leftMmps, float rightMmps)
+{
+  desiredLeftWheelMmps_ = leftMmps;
+  desiredRightWheelMmps_ = rightMmps;
+}
+
+int Exchange(const HeadToBody& headData)
+{
+  if (udpFd_ < 0) {
+    return 0;
   }
 
   VicBridgeH2B cmd = {};
@@ -98,44 +143,35 @@ bool Exchange(const HeadToBody& headData)
   cmd.seq = ++txSeq_;
   cmd.h2b = headData;
   cmd.gripper = gripperOn_ ? 1 : 0;
+  cmd.setpointValid = setpointValid_;
+  cmd.headCmdSeq = headCmdSeq_;
+  cmd.headCmdAngleRad = headCmdAngleRad_;
+  cmd.headCmdSpeedRadPerSec = headCmdSpeedRadPerSec_;
+  cmd.headCmdAccelRadPerSec2 = headCmdAccelRadPerSec2_;
+  cmd.headCmdDurationSec = headCmdDurationSec_;
+  cmd.liftCmdSeq = liftCmdSeq_;
+  cmd.liftCmdHeightMm = liftCmdHeightMm_;
+  cmd.liftCmdSpeedRadPerSec = liftCmdSpeedRadPerSec_;
+  cmd.liftCmdAccelRadPerSec2 = liftCmdAccelRadPerSec2_;
+  cmd.liftCmdDurationSec = liftCmdDurationSec_;
+  cmd.desiredLeftWheelMmps = desiredLeftWheelMmps_;
+  cmd.desiredRightWheelMmps = desiredRightWheelMmps_;
 
-  ssize_t w = send(connFd_, &cmd, sizeof(cmd), MSG_NOSIGNAL);
-  if (w < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-    close(connFd_);
-    connFd_ = -1;
-    return false;
+  int fresh = DrainUdp();
+  if (havePeer_) {
+    sendto(udpFd_, &cmd, sizeof(cmd), MSG_NOSIGNAL | MSG_DONTWAIT,
+           (struct sockaddr*)&peer_, peerLen_);
   }
 
-  bool gotFresh = false;
-  {
-    struct pollfd pfd;
-    pfd.fd = connFd_;
-    pfd.events = POLLIN;
-    pfd.revents = 0;
-    int pr = poll(&pfd, 1, 200 /*ms*/);
-    if (pr > 0 && (pfd.revents & (POLLHUP | POLLERR))) {
-      close(connFd_);
-      connFd_ = -1;
-    } else if (pr > 0 && (pfd.revents & POLLIN)) {
-      VicBridgeB2H frame;
-      ssize_t r = recv(connFd_, &frame, sizeof(frame), 0);
-      if (r == (ssize_t)sizeof(frame)) {
-        if (frame.magic == VIC_BRIDGE_MAGIC && frame.version == VIC_BRIDGE_PROTO_VERSION) {
-          latest_ = frame;
-          haveBody_ = true;
-          gotFresh = true;
-        }
-      } else if (r == 0) {
-        close(connFd_);
-        connFd_ = -1;
-      } else if (r < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-        close(connFd_);
-        connFd_ = -1;
-      }
-    }
+  struct pollfd pfd;
+  pfd.fd = udpFd_;
+  pfd.events = POLLIN;
+  pfd.revents = 0;
+  const int timeoutMs = havePeer_ ? 200 : 0;
+  if (poll(&pfd, 1, timeoutMs) > 0 && (pfd.revents & POLLIN)) {
+    fresh += DrainUdp();
   }
-
-  return gotFresh;
+  return fresh;
 }
 
 const BodyToHead* LatestBody()
@@ -143,29 +179,29 @@ const BodyToHead* LatestBody()
   return haveBody_ ? &latest_.b2h : nullptr;
 }
 
-bool LatestImu(HAL::IMU_DataStructure& imu)
+bool PopImu(HAL::IMU_DataStructure& imu)
 {
-  if (!haveBody_) {
+  if (imuQueue_.empty()) {
     return false;
   }
+  const VicBridgeImu& src = imuQueue_.front();
   for (int i = 0; i < 3; ++i) {
-    imu.gyro[i]  = latest_.imu.gyro[i];
-    imu.accel[i] = latest_.imu.accel[i];
+    imu.gyro[i]  = src.gyro[i];
+    imu.accel[i] = src.accel[i];
   }
-  imu.temperature_degC = latest_.imu.temperature_degC;
+  imu.temperature_degC = src.temperature_degC;
+  imuQueue_.pop_front();
   return true;
 }
 
 bool IsConnected()
 {
-  return connFd_ >= 0;
+  return havePeer_;
 }
 
 void Shutdown()
 {
-  if (connFd_ >= 0) { close(connFd_); connFd_ = -1; }
-  if (listenFd_ >= 0) { close(listenFd_); listenFd_ = -1; }
-  unlink(VIC_BRIDGE_BODY_SOCK_PATH);
+  if (udpFd_ >= 0) { close(udpFd_); udpFd_ = -1; }
 }
 
 } // namespace SimBodyBridge

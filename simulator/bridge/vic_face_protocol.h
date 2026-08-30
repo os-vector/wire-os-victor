@@ -3,7 +3,6 @@
 
 #include <stdint.h>
 
-#define VIC_BRIDGE_FACE_SOCK_PATH "/tmp/vector_face.sock"
 #define VIC_FACE_MAGIC            0x56494346u  // VICF
 #define VIC_FACE_VERSION          1u
 

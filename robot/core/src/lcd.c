@@ -359,62 +359,59 @@ void lcd_draw_frame2_santek(const uint16_t* frame, size_t size) {
 
 #ifdef STANDALONE_SIM
 #include <sys/socket.h>
-#include <sys/un.h>
-#include <sys/stat.h>
 #include <string.h>
+#include <time.h>
 #include "vic_face_protocol.h"
+#include "vic_net.h"
 
-static int s_faceListenFd = -1;
-static int s_faceConnFd   = -1;
 static uint32_t s_faceSeq = 0;
+static int s_faceUdpFd = -1;
+static struct sockaddr_storage s_facePeer;
+static socklen_t s_facePeerLen = 0;
+static int s_faceHavePeer = 0;
+static double s_faceLastHello = -1.0;
 
-static void lcd_sim_face_init(void) {
-  s_faceListenFd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
-  if (s_faceListenFd < 0) {
-    return;
+static double lcd_sim_mono_now(void) {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return (double)ts.tv_sec + (double)ts.tv_nsec * 1e-9;
+}
+
+static void lcd_sim_face_drain_hellos(void) {
+  for (;;) {
+    char buf[16];
+    struct sockaddr_storage src;
+    socklen_t srcLen = sizeof(src);
+    ssize_t r = recvfrom(s_faceUdpFd, buf, sizeof(buf), MSG_DONTWAIT,
+                         (struct sockaddr*)&src, &srcLen);
+    if (r < 0) {
+      break;
+    }
+    s_facePeer = src;
+    s_facePeerLen = srcLen;
+    s_faceHavePeer = 1;
+    s_faceLastHello = lcd_sim_mono_now();
   }
-  struct sockaddr_un addr;
-  memset(&addr, 0, sizeof(addr));
-  addr.sun_family = AF_UNIX;
-  strncpy(addr.sun_path, VIC_BRIDGE_FACE_SOCK_PATH, sizeof(addr.sun_path) - 1);
-  unlink(VIC_BRIDGE_FACE_SOCK_PATH);
-  if (bind(s_faceListenFd, (struct sockaddr*)&addr, sizeof(addr)) < 0 ||
-      listen(s_faceListenFd, 1) < 0) {
-    close(s_faceListenFd);
-    s_faceListenFd = -1;
-    return;
-  }
-  chmod(VIC_BRIDGE_FACE_SOCK_PATH, 0777);
-  int fl = fcntl(s_faceListenFd, F_GETFL, 0);
-  if (fl >= 0) {
-    fcntl(s_faceListenFd, F_SETFL, fl | O_NONBLOCK);
+  if (s_faceHavePeer && lcd_sim_mono_now() - s_faceLastHello > 3.0) {
+    s_faceHavePeer = 0;
   }
 }
 
 static void lcd_sim_send_face(const uint16_t* frame, size_t size) {
   static int inited = 0;
   if (!inited) {
-    lcd_sim_face_init();
+    s_faceUdpFd = vicnet_udp_server(NULL, VIC_NET_PORT_FACE);
     inited = 1;
   }
-  if (s_faceListenFd < 0) {
+  if (s_faceUdpFd < 0) {
     return;
-  }
-  if (s_faceConnFd < 0) {
-    int fd = accept(s_faceListenFd, NULL, NULL);
-    if (fd < 0) {
-      return;
-    }
-    int sndbuf = 256 * 1024;
-    setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &sndbuf, sizeof(sndbuf));
-    int fl = fcntl(fd, F_GETFL, 0);
-    if (fl >= 0) {
-      fcntl(fd, F_SETFL, fl | O_NONBLOCK);
-    }
-    s_faceConnFd = fd;
   }
   const size_t npix = (size_t)VIC_FACE_NPIX;
   if (frame == NULL || size < npix * sizeof(uint16_t)) {
+    return;
+  }
+  lcd_sim_face_drain_hellos();
+  if (!s_faceHavePeer) {
     return;
   }
   static VicFaceFrame ff;
@@ -424,11 +421,8 @@ static void lcd_sim_send_face(const uint16_t* frame, size_t size) {
   ff.width = VIC_FACE_WIDTH;
   ff.height = VIC_FACE_HEIGHT;
   memcpy(ff.rgb565, frame, npix * sizeof(uint16_t));
-  ssize_t w = send(s_faceConnFd, &ff, sizeof(ff), MSG_NOSIGNAL | MSG_DONTWAIT);
-  if (w < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-    close(s_faceConnFd);
-    s_faceConnFd = -1;
-  }
+  sendto(s_faceUdpFd, &ff, sizeof(ff), MSG_NOSIGNAL | MSG_DONTWAIT,
+         (struct sockaddr*)&s_facePeer, s_facePeerLen);
 }
 
 static void lcd_sim_dump_frame(const uint16_t* frame, size_t size) {

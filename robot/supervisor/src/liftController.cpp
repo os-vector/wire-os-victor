@@ -41,7 +41,7 @@ namespace Anki {
         // to have settled enough for recalibration.
         const u32 LIFT_RELAX_TIME_MS = 250;
 
-        const f32 MAX_LIFT_CONSIDERED_STOPPED_RAD_PER_SEC = 0.001f;
+        const f32 MAX_LIFT_CONSIDERED_STOPPED_RAD_PER_SEC = IsCozmoBody() ? 0.05f : 0.001f;
 
         const f32 SPEED_FILTERING_COEFF = 0.9f;
 
@@ -70,7 +70,7 @@ namespace Anki {
 #endif
 
 #if defined(SIMULATOR) || defined(STANDALONE_SIM)
-        const f32 ENCODER_ANGLE_RES = DEG_TO_RAD_F32(0.35f);
+        const f32 ENCODER_ANGLE_RES = DEG_TO_RAD_F32(IsCozmoBody() ? 0.75f : 0.35f);
 
         f32 Kp_ = 3.f; // proportional control constant
         f32 Kd_ = 0.f;  // derivative gain
@@ -108,9 +108,15 @@ namespace Anki {
         // and the lower lift joint on the forklift assembly.
         f32 currentAngle_rad_ = 0.f;
         f32 desiredAngle_rad_ = 0.f;
+        u32 cmdSeq_ = 0;
+        f32 cmdHeightMm_ = 0.f;
+        f32 cmdSpeed_ = 0.f;
+        f32 cmdAccel_ = 0.f;
+        f32 cmdDuration_ = 0.f;
         f32 currDesiredAngle_rad_ = 0.f;
         f32 prevAngleError_ = 0.f;
         f32 prevHalPos_ = 0.f;
+        bool halPosSeeded_ = false;
         bool inPosition_  = true;
 
         const u32 IN_POSITION_TIME_MS = 100;
@@ -571,6 +577,12 @@ namespace Anki {
         lastInPositionTime_ms_ = 0;
         inPosition_ = false;
 
+        ++cmdSeq_;
+        cmdHeightMm_ = ConvertLiftAngleToLiftHeightMM(desiredAngle_rad_);
+        cmdSpeed_ = maxSpeedRad_;
+        cmdAccel_ = accelRad_;
+        cmdDuration_ = duration_seconds;
+
 
         bool res = false;
         if (duration_seconds > 0) {
@@ -660,6 +672,15 @@ namespace Anki {
                                   speed_rad_per_sec, accel_rad_per_sec2, useVPG);
       }
 
+      void GetLastCommand(u32& seq, f32& heightMm, f32& speed, f32& accel, f32& duration)
+      {
+        seq = cmdSeq_;
+        heightMm = cmdHeightMm_;
+        speed = cmdSpeed_;
+        accel = cmdAccel_;
+        duration = cmdDuration_;
+      }
+
       f32 GetDesiredHeight()
       {
         return ConvertLiftAngleToLiftHeightMM(desiredAngle_rad_);
@@ -721,6 +742,14 @@ namespace Anki {
       Result Update()
       {
         u32 currTime = HAL::GetTimeStamp();
+
+#ifdef STANDALONE_SIM
+        if (!halPosSeeded_ && HAL::SimBodyIsLive()) {
+          halPosSeeded_ = true;
+          prevHalPos_ = HAL::MotorGetPosition(MotorID::MOTOR_LIFT);
+          currentAngle_rad_ = prevHalPos_;
+        }
+#endif
 
         // Update routine for calibration sequence
         CalibrationUpdate();

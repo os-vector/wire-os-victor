@@ -3,7 +3,6 @@
 
 #include <stdint.h>
 
-#define VIC_BRIDGE_CAM_SOCK_PATH "/tmp/vector_cam.sock"
 #define VIC_CAM_MAGIC            0x56494343u  // VICC
 #define VIC_CAM_VERSION          2u
 
@@ -22,5 +21,14 @@ typedef struct VicCamFrame
   uint16_t height;
   uint8_t  yuv[VIC_CAM_FRAME_BYTES];
 } VicCamFrame;
+
+#define VIC_CAM_PARAMS_MAGIC 0x56435041u  /* VCPA */
+
+typedef struct VicCamParams
+{
+  uint32_t magic;
+  uint32_t exposureMs;
+  float    gain;
+} VicCamParams;
 
 #endif /* __VIC_CAM_PROTOCOL_H__ */

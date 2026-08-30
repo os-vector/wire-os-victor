@@ -4,10 +4,13 @@
 #include <stdint.h>
 #include "schema/messages.h"
 
-#define VIC_BRIDGE_BODY_SOCK_PATH "/tmp/vector_body.sock"
 
 #define VIC_BRIDGE_MAGIC          0x56494342u  // VICB
-#define VIC_BRIDGE_PROTO_VERSION  1u
+#define VIC_BRIDGE_PROTO_VERSION  6u
+
+#define VIC_SETPOINT_HEAD  0x1u
+#define VIC_SETPOINT_LIFT  0x2u
+#define VIC_SETPOINT_WHEELS 0x4u
 
 typedef struct VicBridgeImu
 {
@@ -24,7 +27,20 @@ typedef struct VicBridgeH2B
   uint32_t _pad;
   struct HeadToBody h2b;
   uint8_t  gripper;
-  uint8_t  _pad2[3];
+  uint8_t  setpointValid;
+  uint8_t  _pad2[2];
+  float    desiredLeftWheelMmps;
+  float    desiredRightWheelMmps;
+  uint32_t headCmdSeq;
+  float    headCmdAngleRad;
+  float    headCmdSpeedRadPerSec;
+  float    headCmdAccelRadPerSec2;
+  float    headCmdDurationSec;
+  uint32_t liftCmdSeq;
+  float    liftCmdHeightMm;
+  float    liftCmdSpeedRadPerSec;
+  float    liftCmdAccelRadPerSec2;
+  float    liftCmdDurationSec;
 } VicBridgeH2B;
 
 typedef struct VicBridgeB2H

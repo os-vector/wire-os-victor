@@ -707,15 +707,15 @@ Result HAL::Step(void)
 
 #ifdef STANDALONE_SIM
   headData_.framecounter++;
-  const bool gotFreshBody = SimBodyBridge::Exchange(headData_);
+  const int freshBodyFrames = SimBodyBridge::Exchange(headData_);
   const BodyToHead* simBody = SimBodyBridge::LatestBody();
   bodyData_ = simBody ? const_cast<BodyToHead*>(simBody) : &dummyBodyData_;
-  if (gotFreshBody) {
+  if (freshBodyFrames > 0) {
     if (!simClockAnchored_) {
       simTimeMs_ = WallClockMs();
       simClockAnchored_ = true;
     } else {
-      simTimeMs_ += ROBOT_TIME_STEP_MS;
+      simTimeMs_ += (TimeStamp_t)freshBodyFrames * ROBOT_TIME_STEP_MS;
     }
   }
 #endif
@@ -1075,6 +1075,28 @@ void HAL::DisengageGripper() { simGripperEngaged_ = false; SimBodyBridge::SetGri
 bool HAL::IsGripperEngaged() { return simGripperEngaged_; }
 
 bool HAL::SimBodyIsLive() { return SimBodyBridge::LatestBody() != nullptr; }
+
+void HAL::SetHeadCommand(u32 seq, f32 angleRad, f32 speedRadPerSec,
+                         f32 accelRadPerSec2, f32 durationSec)
+{
+  SimBodyBridge::SetHeadCommand(seq, angleRad, speedRadPerSec, accelRadPerSec2, durationSec);
+}
+
+void HAL::SetLiftCommand(u32 seq, f32 heightMm, f32 speedRadPerSec,
+                         f32 accelRadPerSec2, f32 durationSec)
+{
+  SimBodyBridge::SetLiftCommand(seq, heightMm, speedRadPerSec, accelRadPerSec2, durationSec);
+}
+
+void HAL::SetMotorSetpoints(u8 valid)
+{
+  SimBodyBridge::SetMotorSetpoints(valid);
+}
+
+void HAL::SetWheelSetpoints(f32 leftMmps, f32 rightMmps)
+{
+  SimBodyBridge::SetWheelSetpoints(leftMmps, rightMmps);
+}
 #endif
 
 f32 HAL::BatteryGetVoltage()

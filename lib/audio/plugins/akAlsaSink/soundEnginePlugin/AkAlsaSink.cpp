@@ -10,11 +10,18 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#ifdef STANDALONE_SIM
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include "vic_spkr_protocol.h"
+#endif
 #include <cstring>
 #include <cerrno>
 #include <cstdlib>
 #include <cstdio>
 #include <chrono>
+#include <thread>
 #endif
 
 
@@ -141,16 +148,34 @@ AK_DECLARE_THREAD_ROUTINE(AlsaSinkAudioThread)
 			             * pAlsaSinkDevice->m_uOutNumChannels
 			             * sizeof(Anki::AudioEngine::PlugIns::AkAlsaSinkPluginTypes::AkSinkAudioSample_t);
 			if (bytes > sizeof(local)) { bytes = sizeof(local); }
-			const uint8_t* p = (const uint8_t*)local;
-			int writeCalls = 0;
-			while (bytes > 0 && pAlsaSinkDevice->m_bThreadRun && pAlsaSinkDevice->m_simAudioFd >= 0)
 			{
-				ssize_t written = write(pAlsaSinkDevice->m_simAudioFd, p, bytes);
-				if (written < 0) { if (errno == EINTR) { continue; } break; }
-				bytes -= (size_t)written; p += (size_t)written;
-				++writeCalls;
+				using clock = std::chrono::steady_clock;
+				static clock::time_point next{};
+				const clock::time_point now = clock::now();
+				if (next == clock::time_point{} || now > next + std::chrono::milliseconds(250)) {
+					next = now;
+				}
+				if (next > now) {
+					std::this_thread::sleep_for(next - now);
+				}
+				const uint32_t rate = pAlsaSinkDevice->m_uSampleRate ? pAlsaSinkDevice->m_uSampleRate : 32000;
+				next += std::chrono::microseconds(
+					(uint64_t)pAlsaSinkDevice->m_uFrameSize * 1000000ull / rate);
 			}
-			if (writeCalls > 1) { pAlsaSinkDevice->m_simBlockedWrites.fetch_add(1, std::memory_order_relaxed); }
+			static VicSpkrChunk chunk;
+			chunk.magic = VIC_SPKR_MAGIC;
+			chunk.version = VIC_SPKR_VERSION;
+			chunk.seq = pAlsaSinkDevice->m_simSpkrSeq++;
+			chunk.sampleRate = pAlsaSinkDevice->m_uSampleRate;
+			uint32_t nsamples = (uint32_t)(bytes / sizeof(int16_t));
+			if (nsamples > VIC_SPKR_CHUNK) { nsamples = VIC_SPKR_CHUNK; }
+			chunk.nsamples = nsamples;
+			memcpy(chunk.samples, local, nsamples * sizeof(int16_t));
+			const size_t sendBytes = sizeof(chunk) - sizeof(chunk.samples)
+			                       + nsamples * sizeof(int16_t);
+			if (pAlsaSinkDevice->m_simAudioFd >= 0) {
+				send(pAlsaSinkDevice->m_simAudioFd, &chunk, sendBytes, MSG_DONTWAIT);
+			}
 			pAlsaSinkDevice->m_pSinkPluginContext->SignalAudioThread();
 		}
 		else
@@ -282,18 +307,35 @@ static AKRESULT alsa_stream_connect(void *in_puserdata)
 			pAlsaSinkDevice->m_uOutNumChannels =
 				Anki::AudioEngine::PlugIns::AkAlsaSinkPluginTypes::kAkAlsaSinkChannelCount;
 		}
-		static const char* kSimFifoPath = "/tmp/vector_audio.fifo";
-		mkfifo(kSimFifoPath, 0666); // ok if it already exists (EEXIST)
-		pAlsaSinkDevice->m_simAudioFd = open(kSimFifoPath, O_RDWR | O_CLOEXEC);
-		if (pAlsaSinkDevice->m_simAudioFd < 0) {
-			AK_LOG_ERROR("%s: STANDALONE_SIM: could not open FIFO %s: %s",
-			             __func__, kSimFifoPath, strerror(errno));
+		const char* udpDest = getenv("VIC_SPKR_UDP");
+		char host[64];
+		strncpy(host, (udpDest != NULL && udpDest[0] != '\0') ? udpDest : "127.0.0.1",
+		        sizeof(host) - 1);
+		host[sizeof(host) - 1] = '\0';
+		int port = 5805;
+		char* colon = strchr(host, ':');
+		if (colon != NULL) {
+			*colon = '\0';
+			port = atoi(colon + 1);
+		}
+		int fd = socket(AF_INET, SOCK_DGRAM, 0);
+		if (fd < 0) {
+			AK_LOG_ERROR("%s: STANDALONE_SIM: UDP socket failed: %s", __func__, strerror(errno));
 			return AK_Fail;
 		}
-		// keep it small. ~64 ms
-		fcntl(pAlsaSinkDevice->m_simAudioFd, F_SETPIPE_SZ, 4096);
-		AK_LOG_INFO("%s: STANDALONE_SIM: audio -> FIFO %s (play: aplay -f S16_LE -c1 -r %u %s)",
-		            __func__, kSimFifoPath, pAlsaSinkDevice->m_uSampleRate, kSimFifoPath);
+		struct sockaddr_in addr;
+		memset(&addr, 0, sizeof(addr));
+		addr.sin_family = AF_INET;
+		addr.sin_port = htons((uint16_t)port);
+		addr.sin_addr.s_addr = inet_addr(host);
+		if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
+			AK_LOG_ERROR("%s: STANDALONE_SIM: UDP connect %s:%d failed: %s",
+			             __func__, host, port, strerror(errno));
+			close(fd);
+			return AK_Fail;
+		}
+		pAlsaSinkDevice->m_simAudioFd = fd;
+		AK_LOG_INFO("%s: STANDALONE_SIM: audio -> UDP %s:%d", __func__, host, port);
 		return AK_Success;
 	}
 #endif

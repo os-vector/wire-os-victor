@@ -3,7 +3,6 @@
 
 #include <stdint.h>
 
-#define VIC_BRIDGE_CUBE_SOCK_PATH "/tmp/vector_cube.sock"
 #define VIC_CUBE_MAGIC            0x56494343u  // VICC
 #define VIC_CUBE_VERSION          1u
 #define VIC_CUBE_FACTORYID_LEN    20           // ED:BB:02:DE:85:23 = 17 + null

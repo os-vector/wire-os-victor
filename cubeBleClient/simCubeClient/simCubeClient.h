@@ -46,8 +46,7 @@ public:
 private:
   void RunLoop();
 
-  int _listenFd = -1;
-  int _connFd   = -1;
+  int _udpFd = -1;
   std::thread _thread;
 
   std::atomic<bool> _run{false};
