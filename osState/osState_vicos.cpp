@@ -171,7 +171,7 @@ std::string GetProperty(const std::string& key)
   }
   if(key == "anki.robot.name")     { return "Vector R2D2"; }
   if(key == "ro.anki.product.name"){ return "Vector"; }
-  if(key == "ro.build.display.id") { return "WEBOTS"; }
+  if(key == "ro.build.display.id") { return "QEMU"; }
   return std::string();
 #else
   char propBuf[PROPERTY_VALUE_MAX] = {0};
