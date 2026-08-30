@@ -192,6 +192,24 @@ sudo systemctl restart systemd-binfmt.service
 
 That will eventually open up `mprocs`, a program for managing multiple processes. Press `q` in that terminal window to exit, and click "Close without saving" in WeBots if asked.
 
+## Cozmo
+
+Wanna run WireOS on Cozmo??
+
+If you have a beefy x86_64 Linux machine with a Wi-Fi card, go for it!
+
+Follow the simulator instructions, but instead of `./sim.sh`, run:
+
+```
+./sim.sh -cozmo
+```
+
+Make sure you're connected to the internet while the script is running, as it downloads dependencies.
+
+If you have more than one network adapter, you can have one connected to the internet and one connected to Cozmo at the same time throughout the whole process.
+
+If you only have one, you can just run the script while connected to the internet, and it will tell you when you should change your network over to Cozmo. Also note that if you have run it once, you don't need the internet to run it a second time.
+
 ## Cleaning
 
 99% of the time, if you're working on a behavior or something, you don't need to clean any build directories. The CMakeLists are correctly setup to properly rebuild the code which needs to be rebuilt upon a file change.
