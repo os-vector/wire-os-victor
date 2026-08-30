@@ -194,7 +194,7 @@ That will eventually open up `mprocs`, a program for managing multiple processes
 
 ## Cozmo
 
-Wanna run WireOS on Cozmo??
+You can run the victor processes on your computer and use Cozmo as the vessel.
 
 If you have a beefy x86_64 Linux machine with a Wi-Fi card, go for it!
 
