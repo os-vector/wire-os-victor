@@ -298,6 +298,10 @@ void BehaviorsBootLoader::InitOnboarding()
     }
   }
   
+# if defined(STANDALONE_SIM)
+  _stage = OnboardingStages::Complete;
+# endif
+
   PRINT_CH_INFO("Behaviors", "BehaviorsBootLoader.InitOnboarding.OnboardingStage",
                 "Robot booted with onboarding state %s", OnboardingStagesToString(_stage));
   

@@ -43,7 +43,9 @@ namespace HeadController {
       f32 angleErrorSum_ = 0.f;
       f32 prevAngleError_ = 0.f;
       f32 prevHalPos_ = 0.f;
+#ifdef STANDALONE_SIM
       bool halPosSeeded_ = false;
+#endif
       bool inPosition_  = true;
 
       const f32 SPEED_FILTERING_COEFF = 0.5f;

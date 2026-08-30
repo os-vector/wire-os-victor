@@ -54,6 +54,13 @@ static const float kWheelStreamDeadband = 2.f;
 
 static const uint16_t kRearCliffValue = 1000;
 static const float kCliffScale = 180.f / 400.f;
+static const float kGravityMmps2 = 9800.f;
+static const float kStableTiltMmps2 = 2500.f;
+static const float kStableMagTolMmps2 = 1800.f;
+static const float kStableGyroRadps = 0.5f;
+static const float kMotorIdleRate = 0.05f;
+static const double kUnstableConfirmSec = 0.2;
+static const double kStableConfirmSec = 0.75;
 static const uint16_t kProxFarMM = 1200;
 static const uint8_t  kProxStatusValid = 0x58;
 
@@ -331,6 +338,9 @@ int main(int argc, char** argv)
   uint32_t frameCounter = 0;
   uint16_t proxSampleCount = 0;
   uint16_t maxCliffSeen = 0;
+  bool onStableSurface = true;
+  double disturbedSince = -1.0;
+  double calmSince = -1.0;
   bool readyAnnounced = false;
   double lastStats = WallNow();
 
@@ -758,14 +768,44 @@ int main(int argc, char** argv)
 
     const bool sensed = robot.HaveState();
 
+    if (sensed) {
+      const float xzMag = hypotf(st.accel[0], st.accel[2]);
+      const float robotAng = atan2f(st.accel[2], st.accel[0]) + (float)st.headAngleRad;
+      const float rf[3] = { xzMag * cosf(robotAng), (float)st.accel[1], xzMag * sinf(robotAng) };
+      const float mag = sqrtf(rf[0] * rf[0] + rf[1] * rf[1] + rf[2] * rf[2]);
+      const bool motorsIdle = fabsf((float)axis[MOTOR_HEAD].rate) < kMotorIdleRate &&
+                              fabsf((float)axis[MOTOR_LIFT].rate) < kMotorIdleRate;
+      const bool disturbed = hypotf(rf[0], rf[1]) > kStableTiltMmps2 ||
+                             fabsf(mag - kGravityMmps2) > kStableMagTolMmps2 ||
+                             (motorsIdle && (fabsf((float)st.gyro[0]) > kStableGyroRadps ||
+                                             fabsf((float)st.gyro[1]) > kStableGyroRadps));
+      if (disturbed) {
+        calmSince = -1.0;
+        if (disturbedSince < 0.0) {
+          disturbedSince = now;
+        }
+        if (now - disturbedSince > kUnstableConfirmSec) {
+          onStableSurface = false;
+        }
+      } else {
+        disturbedSince = -1.0;
+        if (calmSince < 0.0) {
+          calmSince = now;
+        }
+        if (now - calmSince > kStableConfirmSec) {
+          onStableSurface = true;
+        }
+      }
+    }
+
     const uint16_t frontCliff = sensed ? (uint16_t)(st.cliffRaw[0] * kCliffScale) : kRearCliffValue;
-    if (sensed && frontCliff > maxCliffSeen) {
+    if (sensed && onStableSurface && frontCliff > maxCliffSeen) {
       maxCliffSeen = frontCliff;
     }
     b.cliffSense[0] = frontCliff;
     b.cliffSense[1] = frontCliff;
-    b.cliffSense[2] = sensed ? maxCliffSeen : kRearCliffValue;
-    b.cliffSense[3] = sensed ? maxCliffSeen : kRearCliffValue;
+    b.cliffSense[2] = (sensed && onStableSurface) ? maxCliffSeen : frontCliff;
+    b.cliffSense[3] = b.cliffSense[2];
 
     {
       double volts = st.batteryVoltage;

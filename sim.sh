@@ -49,9 +49,16 @@ if [[ ! "$(uname -a)" == *"Linux"* ]]; then
 	exit 1
 fi
 
-if [[ ! "$(uname -a)" == *"x86_64"* ]]; then
-	echo "this only works on x86_64 right now"
-	exit 1
+if [[ $COZMO == "1" ]]; then
+	if [[ ! "$(uname -a)" == *"x86_64"* && ! "$(uname -a)" == *"aarch64"* ]]; then
+		echo "this only works on x86_64 and aarch64 right now"
+		exit 1
+	fi
+else
+	if [[ ! "$(uname -a)" == *"x86_64"* ]]; then
+		echo "this only works on x86_64 right now"
+		exit 1
+	fi
 fi
 
 echo "latest OS: $OS_LATEST"
@@ -63,8 +70,8 @@ cd .sim
 
 if [[ ! -f mprocs ]]; then
 	mkdir -p mprocs
-	wget https://github.com/pvolok/dekit/releases/download/v0.9.6/mprocs-0.9.6-linux-x86_64-musl.tar.gz
-	tar -zxvf mprocs-0.9.6-linux-x86_64-musl.tar.gz
+	wget https://github.com/pvolok/dekit/releases/download/v0.9.6/mprocs-0.9.6-linux-$(uname -m)-musl.tar.gz
+	tar -zxvf mprocs-0.9.6-linux-$(uname -m)-musl.tar.gz
 	chmod +rwx mprocs
 fi
 
@@ -83,7 +90,7 @@ if [[ $COZMO == "0" ]]; then
 fi
 if [[ $COZMO == "1" ]]; then
 	cd "${TOPLEVEL}/simulator/controllers/vicCozmoBridge"
-	make clean
+	rm -f vicCozmoBridge
 	make
 fi
 cd "${TOPLEVEL}/.sim"
