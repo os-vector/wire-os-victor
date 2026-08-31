@@ -2025,6 +2025,17 @@ namespace Vision {
     SetFromVector( pixels );
   }
 
+  void ImageRGB565::Resize(s32 desiredRows, s32 desiredCols, ResizeMethod method)
+  {
+    if(desiredRows == GetNumRows() && desiredCols == GetNumCols()) {
+      return;
+    }
+
+    ImageRGB unpacked(*this);
+    unpacked.Resize(desiredRows, desiredCols, method);
+    SetFromImageRGB(unpacked);
+  }
+
   ImageRGB565& ImageRGB565::SetFromImage(const Image& image)
   {
     Allocate(image.GetNumRows(), image.GetNumCols());

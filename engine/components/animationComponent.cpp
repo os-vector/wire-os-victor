@@ -902,8 +902,11 @@ void AnimationComponent::HandleMessage(const ExternalInterface::DisplayFaceImage
 
   _oledImageBuilder->AddDataChunk(msg.faceData, msg.chunkIndex, msg.numPixels);
 
+  static const uint32_t kExpectedNumChunks =
+      (Vision::RGB565ImageBuilder::PIXEL_COUNT + Vision::RGB565ImageBuilder::PIXEL_COUNT_PER_CHUNK - 1) /
+      Vision::RGB565ImageBuilder::PIXEL_COUNT_PER_CHUNK;
   uint32_t fullMask = 0;
-  for( int i=0; i<msg.numChunks; ++i )
+  for( int i=0; i<kExpectedNumChunks; ++i )
   {
     fullMask |= (1L << i);
   }
@@ -911,7 +914,16 @@ void AnimationComponent::HandleMessage(const ExternalInterface::DisplayFaceImage
   // did we recieve every chunk we need?
   if( (_oledImageBuilder->GetRecievedChunkMask() ^ fullMask) == 0 )
   {
-    Vision::ImageRGB565 image(FACE_DISPLAY_HEIGHT, FACE_DISPLAY_WIDTH, _oledImageBuilder->GetAllData());
+    static const s32 kAnkiVectorWidth  = 184;
+    static const s32 kAnkiVectorHeight = 96;
+
+    Vision::ImageRGB565 image(kAnkiVectorHeight, kAnkiVectorWidth, _oledImageBuilder->GetAllData());
+
+    if (FACE_DISPLAY_WIDTH != kAnkiVectorWidth || FACE_DISPLAY_HEIGHT != kAnkiVectorHeight)
+    {
+      image.Resize(FACE_DISPLAY_HEIGHT, FACE_DISPLAY_WIDTH);
+    }
+
     DisplayFaceImage(image, msg.duration_ms, msg.interruptRunning);
 
     _oledImageBuilder->Clear();
