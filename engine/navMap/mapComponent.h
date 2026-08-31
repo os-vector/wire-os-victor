@@ -140,7 +140,14 @@ public:
   
   void SetUseProxObstaclesInPlanning(bool enable);
   bool GetUseProxObstaclesInPlanning() const { return _enableProxCollisions; }
-  
+
+  // the charger bay collides by default so paths route around the charger. behaviors that mean to drive
+  // onto it hold an allowance while activated. these nest, so the bay reopens only once the last holder
+  // lets go. see BehaviorOperationModifiers::allowsDrivingOntoCharger
+  void PushDriveOntoChargerAllowance();
+  void PopDriveOntoChargerAllowance();
+  bool IsDrivingOntoChargerAllowed() const { return _driveOntoChargerAllowanceCount > 0; }
+
   // marks observable object as unobserved
   void MarkObjectUnobserved(const ObservableObject& object);
   
@@ -240,6 +247,11 @@ private:
 
   // config variable for conditionally enabling/disabling prox obstacles in planning
   bool                            _enableProxCollisions;
+
+  // how many activated behaviors are currently letting us drive onto the charger
+  int                             _driveOntoChargerAllowanceCount = 0;
+
+  void UpdateChargerBayCollisions();
 };
 
 }

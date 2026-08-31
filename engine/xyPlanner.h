@@ -85,7 +85,7 @@ private:
   std::vector<Point2f> GenerateWayPoints(const std::vector<Point2f>& plan) const;
 
   // given a set of points, generate the largest safe circumscibed arc for each turn
-  std::vector<Planning::PathSegment> SmoothCorners(const std::vector<Point2f>& pts) const;
+  std::vector<Planning::PathSegment> SmoothCorners(const std::vector<Point2f>& pts, std::string& radiiUsed) const;
 
   // if p corresponds to a pose in _targets, return the correspondance index. if it is not, returns _targets.size()
   Planning::GoalID FindGoalIndex(const Point2f& p) const;

@@ -53,6 +53,10 @@ private:
   
   // true if a poly of the width of the robot to a point dist_mm away is free of obstacles
   bool RobotPathFreeOfObstacle( float dist_mm, bool useRobotWidth ) const;
+
+  // true if we can spin in place without any part of the robot hitting something. the check above
+  // only looks forward
+  bool RobotCanScanInPlace() const;
   
   // true if a prox obstacle is within dist_mm away
   bool RobotSeesObstacleInFront( float dist_mm, bool forActivation ) const;
@@ -65,6 +69,7 @@ private:
   
   enum class State : uint8_t {
     Initial=0,
+    PreApproachScan,
     DriveToObstacle,
     CheckForHand,
     FirstTurn,

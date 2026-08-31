@@ -45,6 +45,9 @@ static const f32 kObsTriggerSensitivity       = 1.2;   // scaling factor for rob
 static const f32 kObsMinObjectSpeed_mmps      = 50;    // prevents trigger if robot is stationary
 static const f32 kObsMaxRotation_rad          = DEG_TO_RAD(3);  // max rotation amount across all samples before considered turning
 static const int kObsMaxObjectDistance_mm     = 100;   // don't respond if sensor reading is too far
+// one dithered sample against the windowed average fakes a huge closing speed. a real obstacle
+// stays true for many ticks while the window catches up, noise doesn't
+static const int kObsRequiredConsecutiveTicks = 3;
 }
 
 namespace Anki {
@@ -152,6 +155,7 @@ void AIComponent::CheckForSuddenObstacle(Robot& robot)
 
   // Check that there are a sufficient number of samples
   if (n < kNumRequiredSamples) {
+    _suddenObstacleTickCount = 0;
     _suddenObstacleDetected = false;
     return;
   }
@@ -189,12 +193,21 @@ void AIComponent::CheckForSuddenObstacle(Robot& robot)
   // 6) Last sensor reading is less than a certain distance that defines
   //    how close an obstacle needs to be in order for it to be sudden.
   static bool wasObstacleDetected = false;
-  _suddenObstacleDetected = foundObject &&
+  const bool obstacleConditionsMet = foundObject &&
                             (avgRobotSpeed_mmps  >= 0.f) &&
                             (avgObjectSpeed_mmps >= kObsTriggerSensitivity * avgRobotSpeed_mmps) &&
                             (angleRange_rad <= kObsMaxRotation_rad) &&
                             (avgObjectSpeed_mmps >= kObsMinObjectSpeed_mmps) &&
                             (latestDistance_mm <= kObsMaxObjectDistance_mm);
+
+  if (obstacleConditionsMet) {
+    if (_suddenObstacleTickCount < kObsRequiredConsecutiveTicks) {
+      ++_suddenObstacleTickCount;
+    }
+  } else {
+    _suddenObstacleTickCount = 0;
+  }
+  _suddenObstacleDetected = (_suddenObstacleTickCount >= kObsRequiredConsecutiveTicks);
 
   if (!wasObstacleDetected && _suddenObstacleDetected) {
     DASMSG(robot_obstacle_detected,

@@ -121,6 +121,7 @@ private:
 
   ComponentPtr _aiComponents;
   bool   _suddenObstacleDetected;
+  int    _suddenObstacleTickCount = 0;
 
   void CheckForSuddenObstacle(Robot& robot);
 };

@@ -38,7 +38,7 @@ public:
   virtual MemoryMapDataPtr Clone() const override;
   
   // return true if this type collides with the robot
-  virtual bool IsCollisionType() const override { return IsConfirmedObstacle(); }
+  virtual bool IsCollisionType() const override { return _collidable && IsConfirmedObstacle(); }
 
   // disable collisions with this prox obstacle (eg, if in the habitat)
   void SetCollidable(bool enable) { _collidable = enable; }
@@ -54,11 +54,24 @@ public:
   
   void MarkExplored() { _explored = ExploredType::EXPLORED; }
 
-  // NOTE: at the time of adding the `_belief` value, there was still pending tuning as to performance for 
+  // NOTE: at the time of adding the `_belief` value, there was still pending tuning as to performance for
   //       removing objects. Once weights and thresholds have been verified, we should probably a more formal
   //       coded relationship to the paramters if possible.
-  void MarkObserved() { _belief = (_belief >= 96) ? 100 : _belief + 4; }
-  void MarkClear()    { _belief = (_belief <= 6 ) ? 0   : _belief - 6; }
+  void MarkObserved() {
+    _consecutiveClears = 0;
+    _belief = (_belief >= 96) ? 100 : _belief + 4;
+  }
+
+  // the sensor dithers, so one clear reading in between observations is noise, not proof the obstacle
+  // left. make the clears agree with each other first, then noise costs us nothing instead of eating
+  // away at real obstacles. erosion rate is untouched so stale stuff still clears out at the old speed.
+  void MarkClear() {
+    if( _consecutiveClears < kConsecutiveClearsBeforeErosion ) {
+      ++_consecutiveClears;
+      return;
+    }
+    _belief = (_belief <= 6) ? 0 : _belief - 6;
+  }
 
   bool IsExplored()          const { return (_explored == ExploredType::EXPLORED); }
   bool IsConfirmedObstacle() const { return (_belief > 40); }
@@ -76,10 +89,14 @@ public:
   // these params when flood filling from EXPLORED to NOT_EXPLORED, although that's not ideal. todo: fix this (FillBorder)
 private:
 
-  Pose2d       _pose;       // assumed obstacle pose (based off robot pose when detected)
-  ExploredType _explored;   // has Victor visited this node?
-  u8           _belief;     // our confidence that there really is an obstacle here
-  bool         _collidable; // if the robot should consider this object as a collision type
+  // how many clears have to agree before we believe them
+  static constexpr u8 kConsecutiveClearsBeforeErosion = 3;
+
+  Pose2d       _pose;              // assumed obstacle pose (based off robot pose when detected)
+  ExploredType _explored;          // has Victor visited this node?
+  u8           _belief;            // our confidence that there really is an obstacle here
+  u8           _consecutiveClears; // clears since the last observation, for debouncing
+  bool         _collidable;        // if the robot should consider this object as a collision type
 };
  
 } // namespace

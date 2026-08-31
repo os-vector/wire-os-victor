@@ -13,7 +13,9 @@
 
 #include "engine/aiComponent/behaviorComponent/behaviors/exploring/behaviorExploringExamineObstacle.h"
 
+#include "anki/cozmo/shared/cozmoConfig.h"
 #include "clad/types/animationTrigger.h"
+#include "coretech/common/engine/math/ball.h"
 #include "coretech/common/engine/math/fastPolygon2d.h"
 #include "coretech/common/engine/math/polygon.h"
 #include "coretech/common/engine/utils/timer.h"
@@ -56,7 +58,11 @@ namespace {
   const float kDistanceForStopTurn_mm = 300.0f;
   const float kDistanceForStartApproach_mm = 80.0f;
   const float kDistanceForStopApproach_mm = 50.0f;
-  
+
+  // the little look-around before driving up to something
+  const float kPreApproachSweepHalfAngle_rad = DEG_TO_RAD(30.0f);
+  const float kPreApproachSweepSpeed_radPerSec = 2.0f;
+
   // For bumping an object. The robot is usually around 5-8cm from the object at this point, but may
   // not be facing it perfectly, so only bump if the object seems to have an appropriate width. The
   // delegated behavior decides if it is close enough
@@ -246,11 +252,35 @@ void BehaviorExploringExamineObstacle::TransitionToNextAction()
   
   if( ( handDetectionEnabled && (_dVars.state == State::CheckForHand)) ||
       (!handDetectionEnabled && (_dVars.state == State::Initial))    ) {
+    // one prox hit only puts a sliver in the map, so we have no idea how wide this thing actually is.
+    // look around a bit first
+    SET_STATE( PreApproachScan );
+    if( RobotCanScanInPlace() ) {
+      // absolute angles
+      const float startAngle_rad = GetBEI().GetRobotInfo().GetPose().GetRotationAngle<'Z'>().ToFloat();
+      auto makeSweepTurn = [](float absAngle_rad) {
+        auto* turn = new TurnInPlaceAction( absAngle_rad, true );
+        turn->SetMaxSpeed( kPreApproachSweepSpeed_radPerSec );
+        return turn;
+      };
+      auto* sweepAction = new CompoundActionSequential({
+        makeSweepTurn( startAngle_rad + kPreApproachSweepHalfAngle_rad ),
+        makeSweepTurn( startAngle_rad - kPreApproachSweepHalfAngle_rad ),
+        makeSweepTurn( startAngle_rad )
+      });
+      DelegateNow( sweepAction, [this](ActionResult res) {
+        TransitionToNextAction();
+      });
+      return;
+    }
+  }
+
+  if( _dVars.state == State::PreApproachScan ) {
     const bool useRobotWidth = true;
     if( RobotPathFreeOfObstacle( kDistanceForStartApproach_mm, useRobotWidth ) ) {
-      
+
       SET_STATE( DriveToObstacle );
-      
+
       // this will get canceled when we get close
       DriveStraightAction* action = new DriveStraightAction( kDistanceForStartApproach_mm );
       DelegateNow( action, [this](ActionResult res) {
@@ -260,7 +290,7 @@ void BehaviorExploringExamineObstacle::TransitionToNextAction()
       return;
     }
   }
-  
+
   // if we're here, we either skipped or have finished the initial approach maneuver
   if( (_dVars.state == State::QuickAnim) || (_dVars.state == State::ReactToHand) ) {
     CancelSelf();
@@ -271,9 +301,11 @@ void BehaviorExploringExamineObstacle::TransitionToNextAction()
   // Depending on what happened above, we could be:
   // - in Initial state if hand detection was not enabled and the path was not free of an obstacle
   // - in CheckForHand state because hand detection was enabled, completed, but path was not free of an obstacle
+  // - in PreApproachScan state because we looked around but the path was not free of an obstacle
   // - in DriveToObstacle state because we drove to the obstacle whether or not hand detection ran
   const bool readyToReact = (_dVars.state == State::Initial ||
                              _dVars.state == State::CheckForHand ||
+                             _dVars.state == State::PreApproachScan ||
                              _dVars.state == State::DriveToObstacle);
   
   if(readyToReact) {
@@ -288,9 +320,15 @@ void BehaviorExploringExamineObstacle::TransitionToNextAction()
       return;
       
     } else {
-      // No hand (or handDetection disabled): Scan and bump whatever is in front of us
+      // No hand (or handDetection disabled): Scan and bump whatever is in front of us.
+      // both branches below turn the body, so bail if there isn't room rather than clipping
+      // whatever is off to the side
+      if( !RobotCanScanInPlace() ) {
+        CancelSelf();
+        return;
+      }
       if( GetRNG().RandDbl() < kProbScan ) {
-        
+
         SET_STATE( FirstTurn );
         
         AnimationTrigger turnAnim = _dVars.firstTurnDirectionIsLeft
@@ -497,10 +535,37 @@ void BehaviorExploringExamineObstacle::BehaviorUpdate()
   
 }
   
+bool BehaviorExploringExamineObstacle::RobotCanScanInPlace() const
+{
+  const auto& robotInfo = GetBEI().GetRobotInfo();
+  const Pose3d& currRobotPose = robotInfo.GetPose();
+
+  // scanning spins the body about the drive center, so the footprint sweeps a disk out to whichever
+  // corner is furthest. the forward checks elsewhere in here say nothing about that
+  Pose3d driveCenterPose = currRobotPose;
+  driveCenterPose.TranslateForward( DRIVE_CENTER_OFFSET );
+  const Point2f driveCenter{ driveCenterPose.GetTranslation() };
+
+  const Quad2f quad = robotInfo.GetBoundingQuadXY( currRobotPose );
+  float sweptRadiusSq = 0.f;
+  for( const auto& corner : quad ) {
+    sweptRadiusSq = std::max( sweptRadiusSq, (Point2f{corner} - driveCenter).LengthSq() );
+  }
+
+  const bool hasCollision = GetBEI().GetMapComponent().CheckForCollisions(
+                              Ball2f{ driveCenter, std::sqrt(sweptRadiusSq) } );
+  // if( hasCollision ) {
+  //   LOG_ERROR("BehaviorExploringExamineObstacle.RobotCanScanInPlace.Blocked",
+  //             "something is within the %.1fmm swept radius, skipping scan",
+  //             std::sqrt(sweptRadiusSq));
+  // }
+  return !hasCollision;
+}
+
 bool BehaviorExploringExamineObstacle::RobotPathFreeOfObstacle( float dist_mm, bool useRobotWidth ) const
 {
   // todo: seems like this could use planner helper methods if theyre exposed
-  
+
   const auto& robotInfo = GetBEI().GetRobotInfo();
   
   const auto memoryMap = GetBEI().GetMapComponent().GetCurrentMemoryMap();

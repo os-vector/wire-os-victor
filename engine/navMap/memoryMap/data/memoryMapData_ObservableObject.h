@@ -28,13 +28,20 @@ class MemoryMapData_ObservableObject : public MemoryMapData
 {
 public:
   // constructor
-  MemoryMapData_ObservableObject(const ObservableObject& o, const Poly2f& p, RobotTimeStamp_t t);
-  
+  MemoryMapData_ObservableObject(const ObservableObject& o, const Poly2f& p, RobotTimeStamp_t t,
+                                 bool isApproachRegion = false);
+
   // create a copy of self (of appropriate subclass) and return it
   MemoryMapDataPtr Clone() const override;
-  
+
   // return true if this type collides with the robot
-  virtual bool IsCollisionType() const override { return _poseIsVerified; }
+  virtual bool IsCollisionType() const override { return _collidable && _poseIsVerified; }
+
+  // not the object itself, but space to stay out of unless we're deliberately going for it (the charger bay)
+  bool IsApproachRegion() const { return _isApproachRegion; }
+
+  // turn off collisions here (eg. while docking with the charger)
+  void SetCollidable(bool enable) { _collidable = enable; }
 
   // if we should have seen the object with the camera, but did not
   void MarkUnobserved() { _poseIsVerified = false; }
@@ -55,8 +62,10 @@ public:
     return otherType == EContentType::ObstacleObservable;
   }
 
-private: 
+private:
   bool _poseIsVerified;
+  bool _isApproachRegion;
+  bool _collidable;
 };
  
 } // namespace

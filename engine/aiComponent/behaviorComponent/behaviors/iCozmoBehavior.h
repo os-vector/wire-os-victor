@@ -91,6 +91,7 @@ struct BehaviorOperationModifiers{
     {"wantsToBeActivatedWhenCarryingObject", &wantsToBeActivatedWhenCarryingObject},
     {"wantsToBeActivatedWhenOffTreads", &wantsToBeActivatedWhenOffTreads},
     {"wantsToBeActivatedWhenOnCharger", &wantsToBeActivatedWhenOnCharger},
+    {"allowsDrivingOntoCharger", &allowsDrivingOntoCharger},
     {"behaviorAlwaysDelegates", &behaviorAlwaysDelegates},
     {"connectToCubeInBackground", &connectToCubeInBackground},
     {"ensuresCubeConnectionAtDelegation", &ensuresCubeConnectionAtDelegation}
@@ -102,6 +103,11 @@ struct BehaviorOperationModifiers{
   bool wantsToBeActivatedWhenCarryingObject = false;
   bool wantsToBeActivatedWhenOffTreads = false;
   bool wantsToBeActivatedWhenOnCharger = true;
+
+  // the charger bay is an obstacle by default so paths go around the charger instead of through it.
+  // set this if the behavior actually means to drive onto it (docking, driving off) and the bay opens
+  // up for as long as the behavior is activated
+  bool allowsDrivingOntoCharger = false;
 
   // If true iCozmoBehavior will automatically cancel the behavior if it hasn't delegated control by the end of its tick
   // Default is True for two reasons:

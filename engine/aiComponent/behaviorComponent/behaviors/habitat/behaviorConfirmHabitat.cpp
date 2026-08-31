@@ -222,6 +222,9 @@ void BehaviorConfirmHabitat::OnBehaviorDeactivated()
 {
   PRINT_CH_INFO("Behaviors", "ConfirmHabitat.Deactivated","");
   GetBEI().GetCliffSensorComponent().EnableStopOnWhite(false);
+  // TransitionToRandomWalk turns prox obstacles off and back on from the action callback, which never
+  // runs if we get cancelled. without this they stay off for everything that runs after us
+  GetBEI().GetMapComponent().SetUseProxObstaclesInPlanning(true);
   _dVars = DynamicVariables();
 }
 

@@ -1,7 +1,11 @@
 {
   "behaviorClass": "GoHome",
   "behaviorID": "GoHome",
-  
+
+  "behaviorModifiers": {
+    "allowsDrivingOntoCharger": true
+  },
+
   "useCliffSensorCorrection" : true,
   "leftTurnAnimTrigger"      : "ChargerDockingLeftTurn",
   "rightTurnAnimTrigger"     : "ChargerDockingRightTurn",

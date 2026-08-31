@@ -84,6 +84,11 @@ CONSOLE_VAR(float, kCliffTimeout_ms, "MapComponent", 1200.f * 1000); // 20 minut
 CONSOLE_VAR(float, kProxExploredTriangleLength_mm, "MapComponent", 300.0f );
 CONSOLE_VAR(float, kProxExploredTriangleHalfWidth_mm, "MapComponent", 50.0f );
 
+// keep out zone behind the charger. that's where the cable is, and it's usually shoved against a wall
+// or sitting at the edge of a table
+CONSOLE_VAR(float, kChargerRearKeepOutDepth_mm, "MapComponent", 250.0f );
+CONSOLE_VAR(float, kChargerRearKeepOutHalfWidth_mm, "MapComponent", 70.0f );
+
 CONSOLE_VAR(float, kHoughAngleResolution_deg, "MapComponent.VisualEdgeDetection", 2.0);
 CONSOLE_VAR(int,   kHoughAccumThreshold,      "MapComponent.VisualEdgeDetection", 20);
 CONSOLE_VAR(float, kHoughMinLineLength_mm,    "MapComponent.VisualEdgeDetection", 40.0);
@@ -163,7 +168,50 @@ decltype(auto) GetChargerRegion(const Pose3d& poseWRTRoot)
 }
 
 
-decltype(auto) GetHabitatRegion(const Pose3d& poseWRTRoot) 
+decltype(auto) GetChargerBayRegion(const Pose3d& poseWRTRoot)
+{
+  // the inside of the charger, where the robot sits when docked. unlike the body of the charger this
+  // only collides for behaviors that aren't deliberately driving onto it
+  const Vec3f kInteriorChargerOffsetBR = {-12.f, -12.f, 0.f};
+  const Vec3f kInteriorChargerOffsetBL = {-12.f,  12.f, 0.f};
+  const Vec3f kInteriorChargerOffsetFL = {  5.f,  12.f, 0.f};
+  const Vec3f kInteriorChargerOffsetFR = {  5.f, -12.f, 0.f};
+
+  const std::vector<Point3f>& corners = Charger().GetCanonicalCorners();
+  const Point2f interiorBL = poseWRTRoot * (corners[0] + kInteriorChargerOffsetBL);
+  const Point2f interiorFL = poseWRTRoot * (corners[1] + kInteriorChargerOffsetFL);
+  const Point2f interiorFR = poseWRTRoot * (corners[2] + kInteriorChargerOffsetFR);
+  const Point2f interiorBR = poseWRTRoot * (corners[3] + kInteriorChargerOffsetBR);
+
+  return FastPolygon({ interiorBL, interiorFL, interiorFR, interiorBR });
+}
+
+
+decltype(auto) GetChargerRearKeepOutRegion(const Pose3d& poseWRTRoot)
+{
+  // origin is at the front lip with +x running back through the charger, so the rear face is at
+  // x == Charger::kLength. just extend a box back from there
+  //
+  //            nearL--------------------nearR
+  //              |                        |            +x
+  //              |      keep out          |            ^
+  //              |                        |            |
+  //             farL--------------------farR           +-----> +y
+  //
+  const float xNear = Charger::kLength;
+  const float xFar  = Charger::kLength + kChargerRearKeepOutDepth_mm;
+  const float halfW = std::max( kChargerRearKeepOutHalfWidth_mm, 0.5f * Charger::kWidth );
+
+  const Point2f nearL = poseWRTRoot * Point3f(xNear, -halfW, 0.f);
+  const Point2f nearR = poseWRTRoot * Point3f(xNear,  halfW, 0.f);
+  const Point2f farR  = poseWRTRoot * Point3f(xFar,   halfW, 0.f);
+  const Point2f farL  = poseWRTRoot * Point3f(xFar,  -halfW, 0.f);
+
+  return FastPolygon({ nearL, nearR, farR, farL });
+}
+
+
+decltype(auto) GetHabitatRegion(const Pose3d& poseWRTRoot)
 {
   //
   //                   eB                       
@@ -1038,7 +1086,15 @@ void MapComponent::AddObservableObject(const ObservableObject& object, const Pos
             const auto region = MakeUnion2f( GetChargerRegion(newPoseWrtOrigin), GetHabitatRegion(newPoseWrtOrigin) );
             InsertData( region, data );
           } else {
-            InsertData( GetChargerRegion(newPoseWrtOrigin), data );
+            const auto region = MakeUnion2f( GetChargerRegion(newPoseWrtOrigin),
+                                             GetChargerRearKeepOutRegion(newPoseWrtOrigin) );
+            InsertData( region, data );
+
+            const bool kIsApproachRegion = true;
+            MemoryMapData_ObservableObject bayData(object, boundingPoly, _robot->GetLastImageTimeStamp(),
+                                                   kIsApproachRegion);
+            bayData.SetCollidable( _driveOntoChargerAllowanceCount == 0 );
+            InsertData( GetChargerBayRegion(newPoseWrtOrigin), bayData );
           }
         } else if (IsBlockType(objectType, false) ||
                    IsCustomType(objectType, false)) {
@@ -1345,6 +1401,54 @@ void MapComponent::SetUseProxObstaclesInPlanning(bool enable)
     
     UpdateBroadcastFlags(currentNavMemoryMap->TransformContent(enableProx
     ));
+  }
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void MapComponent::PushDriveOntoChargerAllowance()
+{
+  ++_driveOntoChargerAllowanceCount;
+  if (_driveOntoChargerAllowanceCount == 1) {
+    UpdateChargerBayCollisions();
+  }
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void MapComponent::PopDriveOntoChargerAllowance()
+{
+  if (!ANKI_VERIFY(_driveOntoChargerAllowanceCount > 0,
+                   "MapComponent.PopDriveOntoChargerAllowance.Unbalanced", "")) {
+    return;
+  }
+
+  --_driveOntoChargerAllowanceCount;
+  if (_driveOntoChargerAllowanceCount == 0) {
+    UpdateChargerBayCollisions();
+  }
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void MapComponent::UpdateChargerBayCollisions()
+{
+  const bool collidable = (_driveOntoChargerAllowanceCount == 0);
+
+  auto currentNavMemoryMap = GetCurrentMemoryMap();
+  if (currentNavMemoryMap) {
+    // PRINT_CH_INFO("MapComponent", "MapComponent.UpdateChargerBayCollisions",
+    //               "Setting charger bay as %s collidable (%d allowance(s) held)",
+    //               collidable ? "" : "NOT", _driveOntoChargerAllowanceCount);
+
+    NodeTransformFunction setBay = [collidable] (MemoryMapDataPtr data) {
+      if (EContentType::ObstacleObservable == data->type) {
+        auto castPtr = MemoryMapData::MemoryMapDataCast<MemoryMapData_ObservableObject>(data);
+        if (castPtr->IsApproachRegion()) {
+          castPtr->SetCollidable(collidable);
+        }
+      }
+      return data;
+    };
+
+    UpdateBroadcastFlags(currentNavMemoryMap->TransformContent(setBay));
   }
 }
 

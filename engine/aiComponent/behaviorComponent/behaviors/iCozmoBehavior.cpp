@@ -46,6 +46,7 @@
 #include "engine/events/ankiEvent.h"
 #include "engine/externalInterface/externalInterface.h"
 #include "engine/moodSystem/moodManager.h"
+#include "engine/navMap/mapComponent.h"
 #include "engine/robotInterface/messageHandler.h"
 #include "engine/unitTestKey.h"
 
@@ -865,6 +866,10 @@ void ICozmoBehavior::OnActivatedInternal()
       *_operationModifiers.visionModesForActiveScope);
   }
 
+  if( _operationModifiers.allowsDrivingOntoCharger ){
+    GetBEI().GetMapComponent().PushDriveOntoChargerAllowance();
+  }
+
   // Manage state for any WantsToBeActivated conditions used by this Behavior
   // Conditions may not be evaluted when the behavior is Active
   for(auto& condition: _wantsToBeActivatedConditions){
@@ -979,6 +984,10 @@ void ICozmoBehavior::OnDeactivatedInternal()
   // Conditions will be evaluated while the behavior is activated
   for(auto& condition: _wantsToCancelSelfConditions){
     condition->SetActive(GetBEI(), false);
+  }
+
+  if( _operationModifiers.allowsDrivingOntoCharger ){
+    GetBEI().GetMapComponent().PopDriveOntoChargerAllowance();
   }
 
   // clear the path component motion profile if it was set by the behavior

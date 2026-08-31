@@ -290,7 +290,7 @@ namespace {
     std::vector<Ball2f> retv;
     for (int i = 0; i <= nChecks; ++i) {
       f32 rad = startAngle.ToFloat() + i*checkLen;
-      retv.emplace_back(b.GetCentroid() + Point2f(std::cos(rad), std::sin(rad))*(kRobotRadius_mm + padding), kRobotRadius_mm + padding);
+      retv.emplace_back(b.GetCentroid() + Point2f(std::cos(rad), std::sin(rad))*b.GetRadius(), kRobotRadius_mm + padding);
     }
 
     return retv;
@@ -358,9 +358,10 @@ bool XYPlanner::CheckIsPathSafe(const Planning::Path& path, float startAngle, Pl
 
   validPath.Clear();
   for (int i = 0; i < path.GetNumSegments(); ++i) {
-    // TODO VIC-4315 return the actual safe subpath. It might need splitting into smaller components if the
-    // current segment is long and only part of it is unsafe.
+    // TODO VIC-4315 safe subpath is whole segments only. a long segment that's only partly unsafe
+    // needs splitting up to get the rest of it back
     if ( !isSafe(path.GetSegmentConstRef(i)) ) { return false; }
+    validPath.AppendSegment( path.GetSegmentConstRef(i) );
   }
   return true;
 }
@@ -415,7 +416,8 @@ Planning::Path XYPlanner::BuildPath(const std::vector<Point2f>& plan) const
   using namespace Planning;
   Planning::Path path;
 
-  std::vector<PathSegment> turns = SmoothCorners( GenerateWayPoints(plan) );
+  std::string radiiUsed;
+  std::vector<PathSegment> turns = SmoothCorners( GenerateWayPoints(plan), radiiUsed );
 
   // start turn is always a point turn, don't add if it is a small turn
   if (!NEAR(turns.front().GetDef().turn.targetAngle, _start.GetAngle().ToFloat(), kPathPrecisionTolerance)) {
@@ -440,6 +442,21 @@ Planning::Path XYPlanner::BuildPath(const std::vector<Point2f>& plan) const
   if ( !path.CheckContinuity(.0001) ) {
     LOG_WARNING("XYPlanner.BuildPath", "Path smoother gnereated a non-continuous plan");
   }
+
+  // int numPointTurns = 0;
+  // int numLines = 0;
+  // int numArcs = 0;
+  // for (int i = 0; i < path.GetNumSegments(); ++i) {
+  //   switch (path.GetSegmentConstRef(i).GetType()) {
+  //     case Planning::PST_POINT_TURN: { ++numPointTurns; break; }
+  //     case Planning::PST_LINE:       { ++numLines;      break; }
+  //     case Planning::PST_ARC:        { ++numArcs;       break; }
+  //     default:                       { break; }
+  //   }
+  // }
+  // LOG_ERROR("XYPlanner.BuildPath.Diag",
+  //           "segments=%d pointTurns=%d lines=%d arcs=%d cornerRadii=[%s ]",
+  //           (int)path.GetNumSegments(), numPointTurns, numLines, numArcs, radiiUsed.c_str());
 
   return path;
 }
@@ -472,7 +489,7 @@ std::vector<Point2f> XYPlanner::GenerateWayPoints(const std::vector<Point2f>& pl
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-std::vector<Planning::PathSegment> XYPlanner::SmoothCorners(const std::vector<Point2f>& pts) const
+std::vector<Planning::PathSegment> XYPlanner::SmoothCorners(const std::vector<Point2f>& pts, std::string& radiiUsed) const
 {
   std::vector<Planning::PathSegment> turns;
 
@@ -485,10 +502,11 @@ std::vector<Planning::PathSegment> XYPlanner::SmoothCorners(const std::vector<Po
   turns.emplace_back( CreatePointTurnPath(_start, pts[1]) );
 
   // middle turns
-  for (int i = 1; i < pts.size() - 1; ++i) 
+  for (int i = 1; i < pts.size() - 1; ++i)
   {
     Arc corner;
     bool safeArc = false;
+    float chosenRadius = 0.f;
     float x_tail, y_tail, t;
     turns.back().GetEndPose(x_tail,y_tail,t);
 
@@ -498,14 +516,16 @@ std::vector<Planning::PathSegment> XYPlanner::SmoothCorners(const std::vector<Po
       // try inscribed arc first since it is faster, otherwise try circumscibed arc
       if ( GetInscribedArc(pts[i-1], pts[i], pts[i+1], r, corner) ) {
         safeArc = IsArcSafe(corner, kPlanningPadding_mm);
-      } 
+      }
       if ( !safeArc && GetCircumscribedArc(pts[i-1], pts[i], pts[i+1], r, corner) ) {
         safeArc = IsArcSafe(corner, kPlanningPadding_mm) &&
-                  IsLineSafe({Point2f(x_tail,y_tail), corner.start}, kPlanningPadding_mm) && 
+                  IsLineSafe({Point2f(x_tail,y_tail), corner.start}, kPlanningPadding_mm) &&
                   IsLineSafe({corner.end, pts[i+1]}, kPlanningPadding_mm);
       }
-      if (safeArc) { break; }
+      if (safeArc) { chosenRadius = r; break; }
     }
+
+    radiiUsed += safeArc ? (" " + std::to_string((int)chosenRadius)) : std::string(" PT");
 
     turns.emplace_back( (safeArc) ? CreateArcPath(corner) : CreatePointTurnPath( {pts[i-1], pts[i], pts[i+1]} ) );
   }

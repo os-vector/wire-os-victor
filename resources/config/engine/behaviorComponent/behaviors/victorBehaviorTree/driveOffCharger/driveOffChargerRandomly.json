@@ -4,5 +4,9 @@
 
   "associatedActiveFeature": "NoFeature",
 
+  "behaviorModifiers": {
+    "allowsDrivingOntoCharger": true
+  },
+
   "driveDirectionCues": ["randomly"]
 }

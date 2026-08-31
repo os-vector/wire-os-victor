@@ -55,7 +55,7 @@ namespace Vector {
 
 namespace {
 
-static const size_t kMaxTicksToClear = 3;
+static const size_t kMaxTicksToClear = 6;
 static const size_t kMaxTicksToClear_Extended = 120;
 static const float kTimeToClearWaitingForTriggerWordGetIn_s = 3.0f;
 static const char* kCloudIntentJsonKey = "intent";

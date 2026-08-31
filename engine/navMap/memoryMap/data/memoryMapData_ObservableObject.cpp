@@ -17,13 +17,16 @@ namespace Anki {
 namespace Vector {
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-MemoryMapData_ObservableObject::MemoryMapData_ObservableObject(const ObservableObject& o, 
-                                                               const Poly2f& p, 
-                                                               RobotTimeStamp_t t)
+MemoryMapData_ObservableObject::MemoryMapData_ObservableObject(const ObservableObject& o,
+                                                               const Poly2f& p,
+                                                               RobotTimeStamp_t t,
+                                                               bool isApproachRegion)
 : MemoryMapData(MemoryMapTypes::EContentType::ObstacleObservable, t, true)
 , id(o.GetID())
 , boundingPoly(p)
 , _poseIsVerified(true)
+, _isApproachRegion(isApproachRegion)
+, _collidable(true)
 {
 
 }
@@ -42,7 +45,7 @@ bool MemoryMapData_ObservableObject::Equals(const MemoryMapData* other) const
   }
 
   const MemoryMapData_ObservableObject* castPtr = static_cast<const MemoryMapData_ObservableObject*>( other );
-  const bool retv = (id == castPtr->id);
+  const bool retv = (id == castPtr->id) && (_isApproachRegion == castPtr->_isApproachRegion);
   return retv;
 }
   

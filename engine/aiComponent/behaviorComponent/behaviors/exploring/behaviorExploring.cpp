@@ -60,7 +60,7 @@ namespace {
   const float kMaxScanAngle = DEG_TO_RAD( 140.0f );
   constexpr float kMinCliffPenaltyDist_mm = 100.0f;
   constexpr float kMaxCliffPenaltyDist_mm = 600.0f;
-  const float kProxPoseOffset_mm = 120.0f;
+  const float kProxPoseOffset_mm = 160.0f;
   const float kMaxDistToProxPose_mm = 750.0f;
   const float kMinDistToProxPose_mm = 100.0f;
   const float kMaxCubeFromChargerDist_mm = 2000.0f;
@@ -864,7 +864,18 @@ void BehaviorExploring::SampleVisitLocationsFacingObstacle( std::shared_ptr<cons
     pose.TranslateForward(-kProxPoseOffset_mm);
     return pose;
   };
-  
+
+  // these poses come from the obstacle instead of open space, so nothing has collision checked them yet.
+  // only the collision condition though.. the "prefer unknown areas" one would reject the very thing we
+  // came here to look at
+  _iConfig.condHandleCollisions->SetMemoryMap( memoryMap );
+  auto isOffsetPoseSafe = [this](const Pose3d& pose) {
+    Quad2f quad = GetBEI().GetRobotInfo().GetBoundingQuadXY( pose );
+    Poly2f footprint;
+    footprint.ImportQuad2d(quad);
+    return (*_iConfig.condHandleCollisions)( footprint );
+  };
+
   const auto currListBegin = retPoses.begin(); // to mark the position of the beginning before adding more
   // not too close to existing sampled poses, and close to the robot
   auto isPositionedWell = [&currListBegin,&robotPos]( const MemoryMapDataWrapper<const MemoryMapData_ProxObstacle>& data,
@@ -896,7 +907,10 @@ void BehaviorExploring::SampleVisitLocationsFacingObstacle( std::shared_ptr<cons
         add = isPositionedWell( castPtr, retPoses );
       }
       if( add ) {
-        retPoses.push_back( getOffsetPose(*it) );
+        const Pose3d offsetPose = getOffsetPose(*it);
+        if( isOffsetPoseSafe( offsetPose ) ) {
+          retPoses.push_back( offsetPose );
+        }
       }
     }
   } else {
@@ -916,9 +930,13 @@ void BehaviorExploring::SampleVisitLocationsFacingObstacle( std::shared_ptr<cons
       auto castPtr = MemoryMapData::MemoryMapDataCast<const MemoryMapData_ProxObstacle>( sampled );
       const bool positionedWell = isPositionedWell( castPtr, retPoses );
       if( positionedWell ) {
+        const Pose3d offsetPose = getOffsetPose( sampled );
+        if( !isOffsetPoseSafe( offsetPose ) ) {
+          continue;
+        }
         // accept!
-        retPoses.push_back( getOffsetPose( sampled ) );
-        
+        retPoses.push_back( offsetPose );
+
         if( retPoses.end() - currListBegin > kNumProxPoses ) {
           break;
         }
