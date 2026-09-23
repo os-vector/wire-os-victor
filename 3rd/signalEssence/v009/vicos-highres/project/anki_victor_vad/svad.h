@@ -62,7 +62,7 @@ void SVadInit( SVadObject_t *sp, SVadConfig_t *cp );
 void SVadLoadConfigParams(const SVadConfig_t *cp, SVadObject_t *sp);
 
 // 
-int DoSVad(
+SE_SOFTFP_API int DoSVad(
     SVadObject_t *sp,
     float  nfestConfidence,           // noise floor measurement confidence, set to zero if gear noise, 1.0 otherwise
     int16 *pInput_q15);                // input ptr

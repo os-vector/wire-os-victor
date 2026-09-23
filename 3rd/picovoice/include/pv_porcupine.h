@@ -54,17 +54,6 @@ PV_API pv_status_t pv_porcupine_init(
         float sensitivity,
         pv_porcupine_object_t **object);
 
-
-/**
- * softfp-compatible version of pv_porcupine_init
- * @param pointer to a stack variable containing the desired sensitivity
- * calls pv_porcupine_init with dereferenced sensitivity param
- */
-PV_API pv_status_t pv_porcupine_init_softfp(
-        const char *model_file_path,
-        const char *keyword_file_path,
-        float *sensitivity,
-        pv_porcupine_object_t **object);
 /**
  * Constructor for multiple keyword detection.
  *

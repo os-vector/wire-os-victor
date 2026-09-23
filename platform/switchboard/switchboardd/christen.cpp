@@ -15,7 +15,7 @@
 #include <iostream>
 #include <random>
 
-#include <cutils/properties.h>
+#include <wutils/properties.h>
 
 const std::string kProductNamePropertyKey = "ro.anki.product.name";
 const std::string kDefaultProductName = "Vector";

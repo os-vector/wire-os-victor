@@ -36,7 +36,7 @@ extern "C" {
 Initialize MMIF layer and se_lib
 
 =======================================================================*/
-void MMIfInit(float32 additionalRefDelaySec, void *pArgs);
+SE_SOFTFP_API void MMIfInit(float32 additionalRefDelaySec, void *pArgs);
 
 /*=======================================================================
 
@@ -70,7 +70,7 @@ void RcvIfProcessReceivePath(const int16 *rinPtr,
 //
 // basic configuration parameters
 int32 MMIfGetNumMicrophones(void);
-float32 MMIfGetSampleRateHz(MMIfPortID_t port);
+SE_SOFTFP_API float32 MMIfGetSampleRateHz(MMIfPortID_t port);
 int32 MMIfGetBlockSize(MMIfPortID_t port);
 int32 MMIfGetNumChans(MMIfPortID_t port);
     

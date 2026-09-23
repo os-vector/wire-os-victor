@@ -128,13 +128,13 @@ bool SpeechRecognizerPicovoice::Init()
 
 
   LOG_INFO("SpeechRecognizerPicovoice.Init", "Using sensitivity: %.4f", sensitivity);
-  pv_status_t status = pv_porcupine_init_softfp(model_path, ppn_to_use, &sensitivity, &_impl->pvObj);
+  pv_status_t status = pv_porcupine_init(model_path, ppn_to_use, sensitivity, &_impl->pvObj);
 
   if (status != PV_STATUS_SUCCESS) {
       if (ppn_to_use == custom_ppn) {
           LOG_INFO("SpeechRecognizerPicovoice.Init", "loading default pv model");
           ppn_to_use = default_ppn;
-          status = pv_porcupine_init_softfp(model_path, ppn_to_use, &sensitivity, &_impl->pvObj);
+          status = pv_porcupine_init(model_path, ppn_to_use, sensitivity, &_impl->pvObj);
       }
   }
 

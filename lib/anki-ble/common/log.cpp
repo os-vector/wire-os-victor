@@ -22,7 +22,7 @@ static char sAndroidLoggingTag[64] = {'\0'};
 static int sMinLogLevel = kLogLevelVerbose;
 
 #ifdef USE_ANDROID_LOGGING
-#include <utils/Log.h>
+#include <android/log.h>
 static bool sUsingAndroidLogging = true;
 #else
 static bool sUsingAndroidLogging = false;

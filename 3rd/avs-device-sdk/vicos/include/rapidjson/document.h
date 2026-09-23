@@ -316,13 +316,13 @@ struct GenericStringRef {
 
     GenericStringRef(const GenericStringRef& rhs) : s(rhs.s), length(rhs.length) {}
 
-    GenericStringRef& operator=(GenericStringRef& rhs) { s = rhs.s; length = rhs.length; }
+    //GenericStringRef& operator=(const GenericStringRef& rhs) { s = rhs.s; length = rhs.length; }
 
     //! implicit conversion to plain CharType pointer
     operator const Ch *() const { return s; }
 
     const Ch* const s; //!< plain CharType pointer
-    SizeType length; //!< length of the string (excluding the trailing NULL terminator)
+    const SizeType length; //!< length of the string (excluding the trailing NULL terminator)
 
 private:
     //! Disallow construction from non-const array

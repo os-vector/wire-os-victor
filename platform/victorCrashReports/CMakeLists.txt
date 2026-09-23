@@ -50,7 +50,6 @@ if (VICOS)
     target_link_libraries(victorCrashReports
       PRIVATE
       util
-      cutils
     )
   endif()
 

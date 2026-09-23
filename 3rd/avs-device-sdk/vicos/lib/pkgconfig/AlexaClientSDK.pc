@@ -2,7 +2,7 @@ Name: AlexaClientSDK
 Description: A cross-platform, modular SDK for interacting with the Alexa Voice Service
 Version: 1.11.0
 Requires: libcurl sqlite3
-prefix=/home/kerigan/projects/NDA/build-tools/dist/avs-device-sdk/vicos
+prefix=/home/kerigan/projects/build-tools/build-tools/dist/avs-device-sdk/vicos
 includedir=${prefix}/include
 libdir=${prefix}/lib
 Libs: -L${libdir} -lAVSCommon -lACL -lADSL -lAFML -lDeviceSettings -lEqualizerImplementations -lCertifiedSender -lContextManager -lCapabilitiesDelegate -lPlaylistParser -lKWD -lAIP -lAlerts -lAudioPlayer -lBluetooth -lDoNotDisturbCA -lEqualizer -lExternalMediaPlayer -lInteractionModel -lMRM -lNotifications -lPlaybackController -lSpeakerManager -lSpeechSynthesizer -lSettings -lAVSSystem -lTemplateRuntime -lDefaultClient -lAudioResources -lESP -lRegistrationManager -lCBLAuthDelegate -lSpeechEncoder -lSQLiteStorage

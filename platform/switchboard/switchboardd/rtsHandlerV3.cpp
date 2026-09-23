@@ -18,7 +18,7 @@
 #include "util/fileUtils/fileUtils.h"
 
 #include <sstream>
-#include <cutils/properties.h>
+#include <wutils/properties.h>
 
 namespace Anki {
 namespace Switchboard {

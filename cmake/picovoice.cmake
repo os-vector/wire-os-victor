@@ -1,8 +1,8 @@
 set(PICOVOICE_HOME "${CMAKE_SOURCE_DIR}/3rd/picovoice") 
 
 if (VICOS)
-  set(PICOVOICE_LIB_TYPE SHARED)
-  set(PICOVOICE_LIB "${PICOVOICE_HOME}/lib/vicos/libpv_porcupine_softfp.so")
+  set(PICOVOICE_LIB_TYPE STATIC)
+  set(PICOVOICE_LIB "${PICOVOICE_HOME}/lib/vicos/libpv_porcupine.a")
 elseif (MACOSX)
   set(PICOVOICE_LIB_TYPE STATIC)
   set(PICOVOICE_LIB "${PICOVOICE_HOME}/lib/mac/libpv_porcupine.a")

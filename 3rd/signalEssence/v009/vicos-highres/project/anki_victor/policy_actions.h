@@ -125,7 +125,7 @@ typedef struct
 
 
 // asynchonously report the angular orientation relative to true north
-void PolicySetAbsoluteOrientation(float phiRadians);
+SE_SOFTFP_API void PolicySetAbsoluteOrientation(float phiRadians);
 
 void PolicyInit(void);
 

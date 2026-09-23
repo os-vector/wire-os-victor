@@ -143,7 +143,7 @@ if(NOT (STANDALONE_SIM AND VIC_CLOUD_NATIVE))
   add_custom_command(
       OUTPUT "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libopus.so.0"
       COMMAND ${CMAKE_COMMAND}
-      ARGS -E copy_if_different "${CMAKE_SOURCE_DIR}/3rd/opus/vicos/lib/libopus.so.0.10.1" "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libopus.so.0"
+      ARGS -E copy_if_different "${CMAKE_SOURCE_DIR}/3rd/opus/vicos/lib/libopus.so.0.11.1" "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libopus.so.0"
       COMMENT "copy libopus"
       VERBATIM
   )
