@@ -20,7 +20,7 @@
 #include "clad/externalInterface/messageGameToEngine.h"
 #include "clad/externalInterface/messageEngineToGame.h"
 
-#include "cutils/properties.h"
+#include "wutils/properties.h"
 
 #include "switchboardd/savedSessionManager.h"
 

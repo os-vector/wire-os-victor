@@ -37,7 +37,6 @@ PRIVATE
   libresolv.so.2
   libgmodule-2.0.so.0
   libpcre.so.1
-  libcutils.so.0
   util
   victorCrashReports
   anki-ble
@@ -60,7 +59,7 @@ target_include_directories(switchboard
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/switchboardd>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/bleClient>
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/cutils>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/wutils>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/anki-wifi>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/signals>
   $<BUILD_INTERFACE:${LIBSODIUM_INCLUDE_PATH}>
@@ -97,7 +96,6 @@ target_link_libraries(vic-switchboard
   libresolv.so.2
   libgmodule-2.0.so.0
   libpcre.so.1
-  libcutils.so.0
   util
   victorCrashReports
   anki-ble
@@ -138,7 +136,6 @@ target_link_libraries(vic-rescue
   libresolv.so.2
   libgmodule-2.0.so.0
   libpcre.so.1
-  libcutils.so.0
   util
   victorCrashReports
   anki-ble

@@ -1,6 +1,6 @@
 # libspeexdsp pkg-config source file
 
-prefix=/Users/build/buildAgent/work/8a03c47c0838b1c1/dist/speexdsp/vicos
+prefix=/home/kerigan/projects/build-tools/build-tools/dist/speexdsp/vicos
 exec_prefix=${prefix}
 libdir=${exec_prefix}/lib
 includedir=${prefix}/include

@@ -34,7 +34,7 @@
 #include "anki-wifi/wifi.h"
 #include "anki-wifi/exec_command.h"
 #include "auto-test/autoTest.h"
-#include "cutils/properties.h"
+#include "wutils/properties.h"
 #include "switchboardd/christen.h"
 #include "platform/victorCrashReports/victorCrashReporter.h"
 #include "util/fileUtils/fileUtils.h"

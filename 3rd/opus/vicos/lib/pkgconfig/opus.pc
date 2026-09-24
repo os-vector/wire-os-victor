@@ -1,6 +1,6 @@
 # Opus codec reference implementation pkg-config file
 
-prefix=/home/kerigan/projects/vector-cloud-fork/voskopus/built/armel
+prefix=/home/kerigan/projects/vicdeps/opus
 exec_prefix=${prefix}
 libdir=${exec_prefix}/lib
 includedir=${prefix}/include
@@ -8,7 +8,7 @@ includedir=${prefix}/include
 Name: Opus
 Description: Opus IETF audio codec (floating-point build)
 URL: https://opus-codec.org/
-Version: 1.5.2-106-g08bcc6e4
+Version: unknown
 Requires:
 Conflicts:
 Libs: -L${libdir} -lopus

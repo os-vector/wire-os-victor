@@ -12,6 +12,8 @@
 
 #include "opencv2/calib3d.hpp"
 
+#include <future>
+
 #define LOG_CHANNEL "FaceRecognizer"
 
 namespace Anki {
@@ -39,7 +41,7 @@ namespace Vision {
     CONSOLE_VAR_RANGED(f32, kTrackingMaxAreaRatio,     "Vision.FaceDetectorCommon", 2.0f, 1.f, 100.f);
     CONSOLE_VAR_RANGED(s32, kMaxTrackAge_ms,           "Vision.FaceDetectorCommon", 1000, 0, 10000);
     CONSOLE_VAR_RANGED(s32, kNamedTrackReverify_ms,    "Vision.FaceDetectorCommon", 3000, 0, 60000);
-    CONSOLE_VAR(bool,       kRefineLandmarks,          "Vision.FaceDetectorCommon", true);
+    CONSOLE_VAR(bool,       kRefineLandmarks,          "Vision.FaceDetectorCommon", false);
   }
 
   CONSOLE_VAR(bool, kUseUndistortionForFacePose,  "Vision.FaceDetectorCommon", true);
@@ -124,14 +126,20 @@ namespace Vision {
     FaceNetConfig embedderConfig = netConfig;
     embedderConfig.modelPath = Util::FileUtils::FullFilePath({modelDir, kEmbedderModelFile});
 
-    if(RESULT_OK != _detector.Init(detectorConfig))
+    std::future<Result> detectorInitResult = std::async(std::launch::async, [this, &detectorConfig]() {
+      return _detector.Init(detectorConfig);
+    });
+
+    const Result recognizerInitResult = _recognizer.Init(embedderConfig);
+
+    if(RESULT_OK != detectorInitResult.get())
     {
       LOG_ERROR("FaceTrackerImpl.Constructor.DetectorInitFailed", "%s",
                 detectorConfig.modelPath.c_str());
       return;
     }
 
-    if(RESULT_OK != _recognizer.Init(embedderConfig))
+    if(RESULT_OK != recognizerInitResult)
     {
       LOG_ERROR("FaceTrackerImpl.Constructor.RecognizerInitFailed", "%s",
                 embedderConfig.modelPath.c_str());

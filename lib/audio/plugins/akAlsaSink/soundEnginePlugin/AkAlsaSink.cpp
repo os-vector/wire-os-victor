@@ -1109,6 +1109,14 @@ void AkAlsaSink::Consume(
 	AkRamp					in_gain					///< Volume gain to apply to this input (prev corresponds to the beginning, next corresponds to the end of the buffer).
 	)
 {
+#if defined(__arm__) && defined(__ARM_PCS_VFP)
+	// softfp wwise passes in_gain in r2/r3; hardfp expects s0/s1
+	uint32_t prev_bits, next_bits;
+	__asm__ __volatile__("mov %0, r2" : "=r"(prev_bits));
+	__asm__ __volatile__("mov %0, r3" : "=r"(next_bits));
+	memcpy(&in_gain.fPrev, &prev_bits, sizeof(float));
+	memcpy(&in_gain.fNext, &next_bits, sizeof(float));
+#endif
 	AK_LOG_TRACE(__FUNCTION__);
 	if ( in_pInputBuffer->uValidFrames > 0 )
 	{

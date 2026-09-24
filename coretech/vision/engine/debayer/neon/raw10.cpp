@@ -53,7 +53,6 @@ namespace {
  */
 struct StoreInfo
 {
-  std::array<uint8x8x4_t,4> gammaLUT;
   uint8x8_t value_32;
   uint8x8_t mapL;
   uint8x8_t mapH;
@@ -275,15 +274,28 @@ SetupInfo::SetupInfo(const Debayer::InArgs& inArgs, const Debayer::OutArgs& outA
   this->valid = true;
 }
 
-inline void GammaCorrect(const std::array<uint8x8x4_t,4>& gammaLUT, const uint8x8_t& value_32, uint8x8_t& data)
+inline uint8x8x4_t LoadGammaTable(const u8* lut)
+{
+  uint8x8x4_t table;
+  table.val[0] = vld1_u8(lut);
+  table.val[1] = vld1_u8(lut + 8);
+  table.val[2] = vld1_u8(lut + 16);
+  table.val[3] = vld1_u8(lut + 24);
+  return table;
+}
+
+inline __attribute__((always_inline)) void GammaCorrect(const uint8x8x4_t& gamma0, const uint8x8x4_t& gamma1,
+                                                        const uint8x8x4_t& gamma2, const uint8x8x4_t& gamma3,
+                                                        const uint8x8_t& value_32, uint8x8_t& data)
 {
   uint8x8_t buffer = vshr_n_u8(data,1);
-  uint8x8_t output = vtbl4_u8(gammaLUT[0], buffer);
-  for (int i = 1; i < gammaLUT.size(); ++i)
-  {
-    buffer = vsub_u8(buffer, value_32);
-    output = vtbx4_u8(output, gammaLUT[i], buffer);
-  }
+  uint8x8_t output = vtbl4_u8(gamma0, buffer);
+  buffer = vsub_u8(buffer, value_32);
+  output = vtbx4_u8(output, gamma1, buffer);
+  buffer = vsub_u8(buffer, value_32);
+  output = vtbx4_u8(output, gamma2, buffer);
+  buffer = vsub_u8(buffer, value_32);
+  output = vtbx4_u8(output, gamma3, buffer);
   data = output;
 }
 
@@ -332,10 +344,10 @@ Result HandleRAW10::operator()(const Debayer::InArgs& inArgs, Debayer::OutArgs& 
 }
 
 // this essentially increases contrast in the final image
-inline void BlackLevelAndNormalize(uint8x8_t& data)
+inline __attribute__((always_inline)) void BlackLevelAndNormalize(uint8x8_t& data, const bool isXray)
 {
   // we only want to do this for 2.0
-  if (!Vector::IsXray()) {
+  if (!isXray) {
     return;
   }
 
@@ -385,6 +397,8 @@ Result HandleRAW10::RAW10_to_RGB24_FULL(const Debayer::InArgs& inArgs, Debayer::
     return RESULT_FAIL;
   }
 
+  const bool isXray = Vector::IsXray();
+
   // The index to pull values from the table of loaded bytes
   const uint8x8_t index = vld1_u8(setup.indexes.data());
 
@@ -392,11 +406,10 @@ Result HandleRAW10::RAW10_to_RGB24_FULL(const Debayer::InArgs& inArgs, Debayer::
   store.prevG1 = vdup_n_u8(0);
   store.prevG2 = vdup_n_u8(0);
   store.prevValid = false;
-  for (int i = 0; i < store.gammaLUT.size(); ++i){
-    for (int j = 0; j < 4; ++j){
-      store.gammaLUT[i].val[j] = vld1_u8(_gammaLUT.data()+8*(i*4+j));
-    }
-  }
+  const uint8x8x4_t gamma0 = LoadGammaTable(_gammaLUT.data());
+  const uint8x8x4_t gamma1 = LoadGammaTable(_gammaLUT.data() + 32);
+  const uint8x8x4_t gamma2 = LoadGammaTable(_gammaLUT.data() + 64);
+  const uint8x8x4_t gamma3 = LoadGammaTable(_gammaLUT.data() + 96);
   store.value_32 = vdup_n_u8(32);
 
   // Map for creating full size images
@@ -456,17 +469,17 @@ Result HandleRAW10::RAW10_to_RGB24_FULL(const Debayer::InArgs& inArgs, Debayer::
       block.val[2] = unzipped2.val[0];
       block.val[3] = unzipped2.val[1];
 
-      BlackLevelAndNormalize(block.val[0]);
-      BlackLevelAndNormalize(block.val[1]);
-      BlackLevelAndNormalize(block.val[2]);
-      BlackLevelAndNormalize(block.val[3]);
+      BlackLevelAndNormalize(block.val[0], isXray);
+      BlackLevelAndNormalize(block.val[1], isXray);
+      BlackLevelAndNormalize(block.val[2], isXray);
+      BlackLevelAndNormalize(block.val[3], isXray);
 
       // Gamma Correct is the most expensive step timewise. Doing it as a helper function seems to have no effect on
       // the time to complete this step.
-      GammaCorrect(store.gammaLUT, store.value_32, block.val[0]);
-      GammaCorrect(store.gammaLUT, store.value_32, block.val[1]);
-      GammaCorrect(store.gammaLUT, store.value_32, block.val[2]);
-      GammaCorrect(store.gammaLUT, store.value_32, block.val[3]);
+      GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, block.val[0]);
+      GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, block.val[1]);
+      GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, block.val[2]);
+      GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, block.val[3]);
       
       // Store RGB24
       rgb.val[0] = vtbl1_u8(block.val[0], store.mapL);
@@ -511,6 +524,8 @@ Result HandleRAW10::RAW10_to_RGB24_HALF_or_QUARTER(const Debayer::InArgs& inArgs
     return RESULT_FAIL;
   }
 
+  const bool isXray = Vector::IsXray();
+
   // The index to pull values from the table of loaded bytes
   const uint8x8_t index = vld1_u8(setup.indexes.data());
 
@@ -518,11 +533,10 @@ Result HandleRAW10::RAW10_to_RGB24_HALF_or_QUARTER(const Debayer::InArgs& inArgs
   store.prevG1 = vdup_n_u8(0);
   store.prevG2 = vdup_n_u8(0);
   store.prevValid = false;
-  for (int i = 0; i < store.gammaLUT.size(); ++i){
-    for (int j = 0; j < 4; ++j){
-      store.gammaLUT[i].val[j] = vld1_u8(_gammaLUT.data()+8*(i*4+j));
-    }
-  }
+  const uint8x8x4_t gamma0 = LoadGammaTable(_gammaLUT.data());
+  const uint8x8x4_t gamma1 = LoadGammaTable(_gammaLUT.data() + 32);
+  const uint8x8x4_t gamma2 = LoadGammaTable(_gammaLUT.data() + 64);
+  const uint8x8x4_t gamma3 = LoadGammaTable(_gammaLUT.data() + 96);
   store.value_32 = vdup_n_u8(32);
 
   u8* inBufferPtr1 = inArgs.data;
@@ -579,20 +593,20 @@ Result HandleRAW10::RAW10_to_RGB24_HALF_or_QUARTER(const Debayer::InArgs& inArgs
       // the time to complete this step.
       
 #if DO_GREEN_AVG
-      GammaCorrect(store.gammaLUT, store.value_32, block.val[0]);
-      GammaCorrect(store.gammaLUT, store.value_32, block.val[1]);
-      GammaCorrect(store.gammaLUT, store.value_32, block.val[2]);
-      GammaCorrect(store.gammaLUT, store.value_32, block.val[3]);
+      GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, block.val[0]);
+      GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, block.val[1]);
+      GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, block.val[2]);
+      GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, block.val[3]);
       rgb.val[0] = block.val[0];
       rgb.val[1] = vhadd_u8(block.val[1], block.val[2]);
       rgb.val[2] = block.val[3];
 #else
-      BlackLevelAndNormalize(block.val[0]);
-      BlackLevelAndNormalize(block.val[1]);
-      BlackLevelAndNormalize(block.val[3]);
-      GammaCorrect(store.gammaLUT, store.value_32, block.val[0]);
-      GammaCorrect(store.gammaLUT, store.value_32, block.val[1]);
-      GammaCorrect(store.gammaLUT, store.value_32, block.val[3]);
+      BlackLevelAndNormalize(block.val[0], isXray);
+      BlackLevelAndNormalize(block.val[1], isXray);
+      BlackLevelAndNormalize(block.val[3], isXray);
+      GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, block.val[0]);
+      GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, block.val[1]);
+      GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, block.val[3]);
       rgb.val[0] = block.val[0];
       rgb.val[1] = block.val[1];
       rgb.val[2] = block.val[3];
@@ -621,6 +635,8 @@ Result HandleRAW10::RAW10_to_RGB24_EIGHTH(const Debayer::InArgs& inArgs, Debayer
     return RESULT_FAIL;
   }
 
+  const bool isXray = Vector::IsXray();
+
   // The index to pull values from the table of loaded bytes
   const uint8x8_t index = vld1_u8(setup.indexes.data());
 
@@ -628,11 +644,10 @@ Result HandleRAW10::RAW10_to_RGB24_EIGHTH(const Debayer::InArgs& inArgs, Debayer
   store.prevG1 = vdup_n_u8(0);
   store.prevG2 = vdup_n_u8(0);
   store.prevValid = false;
-  for (int i = 0; i < store.gammaLUT.size(); ++i){
-    for (int j = 0; j < 4; ++j){
-      store.gammaLUT[i].val[j] = vld1_u8(_gammaLUT.data()+8*(i*4+j));
-    }
-  }
+  const uint8x8x4_t gamma0 = LoadGammaTable(_gammaLUT.data());
+  const uint8x8x4_t gamma1 = LoadGammaTable(_gammaLUT.data() + 32);
+  const uint8x8x4_t gamma2 = LoadGammaTable(_gammaLUT.data() + 64);
+  const uint8x8x4_t gamma3 = LoadGammaTable(_gammaLUT.data() + 96);
   store.value_32 = vdup_n_u8(32);
 
   u8* inBufferPtr1 = inArgs.data;
@@ -697,20 +712,20 @@ Result HandleRAW10::RAW10_to_RGB24_EIGHTH(const Debayer::InArgs& inArgs, Debayer
       // the time to complete this step.
       
 #if DO_GREEN_AVG
-      GammaCorrect(store.gammaLUT, store.value_32, block.val[0]);
-      GammaCorrect(store.gammaLUT, store.value_32, block.val[1]);
-      GammaCorrect(store.gammaLUT, store.value_32, block.val[2]);
-      GammaCorrect(store.gammaLUT, store.value_32, block.val[3]);
+      GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, block.val[0]);
+      GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, block.val[1]);
+      GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, block.val[2]);
+      GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, block.val[3]);
       rgb.val[0] = block.val[0];
       rgb.val[1] = vhadd_u8(block.val[1], block.val[2]);
       rgb.val[2] = block.val[3];
 #else
-      BlackLevelAndNormalize(block.val[1]);
-      BlackLevelAndNormalize(block.val[2]);
-      BlackLevelAndNormalize(block.val[3]);
-      GammaCorrect(store.gammaLUT, store.value_32, block.val[0]);
-      GammaCorrect(store.gammaLUT, store.value_32, block.val[1]);
-      GammaCorrect(store.gammaLUT, store.value_32, block.val[3]);
+      BlackLevelAndNormalize(block.val[1], isXray);
+      BlackLevelAndNormalize(block.val[2], isXray);
+      BlackLevelAndNormalize(block.val[3], isXray);
+      GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, block.val[0]);
+      GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, block.val[1]);
+      GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, block.val[3]);
       rgb.val[0] = block.val[0];
       rgb.val[1] = block.val[1];
       rgb.val[2] = block.val[3];
@@ -739,6 +754,8 @@ Result HandleRAW10::RAW10_to_Y8_FULL(const Debayer::InArgs& inArgs, Debayer::Out
     return RESULT_FAIL;
   }
 
+  const bool isXray = Vector::IsXray();
+
   // The index to pull values from the table of loaded bytes
   const uint8x8_t index = vld1_u8(setup.indexes.data());
 
@@ -746,11 +763,10 @@ Result HandleRAW10::RAW10_to_Y8_FULL(const Debayer::InArgs& inArgs, Debayer::Out
   store.prevG1 = vdup_n_u8(0);
   store.prevG2 = vdup_n_u8(0);
   store.prevValid = false;
-  for (int i = 0; i < store.gammaLUT.size(); ++i){
-    for (int j = 0; j < 4; ++j){
-      store.gammaLUT[i].val[j] = vld1_u8(_gammaLUT.data()+8*(i*4+j));
-    }
-  }
+  const uint8x8x4_t gamma0 = LoadGammaTable(_gammaLUT.data());
+  const uint8x8x4_t gamma1 = LoadGammaTable(_gammaLUT.data() + 32);
+  const uint8x8x4_t gamma2 = LoadGammaTable(_gammaLUT.data() + 64);
+  const uint8x8x4_t gamma3 = LoadGammaTable(_gammaLUT.data() + 96);
   store.value_32 = vdup_n_u8(32);
 
   // Map for creating full size images
@@ -811,10 +827,10 @@ Result HandleRAW10::RAW10_to_Y8_FULL(const Debayer::InArgs& inArgs, Debayer::Out
 
       // Gamma Correct is the most expensive step timewise. Doing it as a helper function seems to have no effect on
       // the time to complete this step.
-      BlackLevelAndNormalize(block.val[1]);
-      BlackLevelAndNormalize(block.val[2]);
-      GammaCorrect(store.gammaLUT, store.value_32, block.val[1]);
-      GammaCorrect(store.gammaLUT, store.value_32, block.val[2]);
+      BlackLevelAndNormalize(block.val[1], isXray);
+      BlackLevelAndNormalize(block.val[2], isXray);
+      GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, block.val[1]);
+      GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, block.val[2]);
       
       // Store Y8
       vst1_u8(outBufferPtr,                         vtbl1_u8(block.val[1], store.mapL));
@@ -842,6 +858,8 @@ Result HandleRAW10::RAW10_to_Y8_HALF_or_QUARTER(const Debayer::InArgs& inArgs, D
     return RESULT_FAIL;
   }
 
+  const bool isXray = Vector::IsXray();
+
   // The index to pull values from the table of loaded bytes
   const uint8x8_t index = vld1_u8(setup.indexes.data());
 
@@ -849,11 +867,10 @@ Result HandleRAW10::RAW10_to_Y8_HALF_or_QUARTER(const Debayer::InArgs& inArgs, D
   store.prevG1 = vdup_n_u8(0);
   store.prevG2 = vdup_n_u8(0);
   store.prevValid = false;
-  for (int i = 0; i < store.gammaLUT.size(); ++i){
-    for (int j = 0; j < 4; ++j){
-      store.gammaLUT[i].val[j] = vld1_u8(_gammaLUT.data()+8*(i*4+j));
-    }
-  }
+  const uint8x8x4_t gamma0 = LoadGammaTable(_gammaLUT.data());
+  const uint8x8x4_t gamma1 = LoadGammaTable(_gammaLUT.data() + 32);
+  const uint8x8x4_t gamma2 = LoadGammaTable(_gammaLUT.data() + 64);
+  const uint8x8x4_t gamma3 = LoadGammaTable(_gammaLUT.data() + 96);
   store.value_32 = vdup_n_u8(32);
 
   u8* inBufferPtr1 = inArgs.data;
@@ -907,12 +924,12 @@ Result HandleRAW10::RAW10_to_Y8_HALF_or_QUARTER(const Debayer::InArgs& inArgs, D
 
       // Store Y8
 #if DO_GREEN_AVG
-      GammaCorrect(store.gammaLUT, store.value_32, block.val[1]);
-      GammaCorrect(store.gammaLUT, store.value_32, block.val[2]);
+      GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, block.val[1]);
+      GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, block.val[2]);
       vst1_u8(outBufferPtr, vhadd_u8(block.val[1], block.val[2]));
 #else
-      BlackLevelAndNormalize(block.val[1]);
-      GammaCorrect(store.gammaLUT, store.value_32, block.val[1]);
+      BlackLevelAndNormalize(block.val[1], isXray);
+      GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, block.val[1]);
       vst1_u8(outBufferPtr, block.val[1]);
 #endif
 
@@ -937,6 +954,8 @@ Result HandleRAW10::RAW10_to_Y8_EIGHTH(const Debayer::InArgs& inArgs, Debayer::O
     return RESULT_FAIL;
   }
 
+  const bool isXray = Vector::IsXray();
+
   // The index to pull values from the table of loaded bytes
   const uint8x8_t index = vld1_u8(setup.indexes.data());
 
@@ -944,11 +963,10 @@ Result HandleRAW10::RAW10_to_Y8_EIGHTH(const Debayer::InArgs& inArgs, Debayer::O
   store.prevG1 = vdup_n_u8(0);
   store.prevG2 = vdup_n_u8(0);
   store.prevValid = false;
-  for (int i = 0; i < store.gammaLUT.size(); ++i){
-    for (int j = 0; j < 4; ++j){
-      store.gammaLUT[i].val[j] = vld1_u8(_gammaLUT.data()+8*(i*4+j));
-    }
-  }
+  const uint8x8x4_t gamma0 = LoadGammaTable(_gammaLUT.data());
+  const uint8x8x4_t gamma1 = LoadGammaTable(_gammaLUT.data() + 32);
+  const uint8x8x4_t gamma2 = LoadGammaTable(_gammaLUT.data() + 64);
+  const uint8x8x4_t gamma3 = LoadGammaTable(_gammaLUT.data() + 96);
   store.value_32 = vdup_n_u8(32);
 
   u8* inBufferPtr1 = inArgs.data;
@@ -1009,12 +1027,12 @@ Result HandleRAW10::RAW10_to_Y8_EIGHTH(const Debayer::InArgs& inArgs, Debayer::O
       block.val[3] = unzipped2.val[1];
 
 #if DO_GREEN_AVG
-      GammaCorrect(store.gammaLUT, store.value_32, block.val[1]);
-      GammaCorrect(store.gammaLUT, store.value_32, block.val[2]);
+      GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, block.val[1]);
+      GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, block.val[2]);
       vst1_u8(outBufferPtr, vhadd_u8(block.val[1], block.val[2]));
 #else
-      BlackLevelAndNormalize(block.val[1]);
-      GammaCorrect(store.gammaLUT, store.value_32, block.val[1]);
+      BlackLevelAndNormalize(block.val[1], isXray);
+      GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, block.val[1]);
       vst1_u8(outBufferPtr, block.val[1]);
 #endif
 

@@ -11,18 +11,11 @@ option(SE_HIGHRES "Enable Signal Essence High Resolution Echo Cancelling" ON)
 
 include(signalessence)
 
-add_library(signal_essence STATIC
-  "${SIGNALESSENCE_PROJ_SRC}/crossoverconfig.c"
-  "${SIGNALESSENCE_PROJ_SRC}/fdsearchconfig.c"
-  "${SIGNALESSENCE_PROJ_SRC}/mmif_proj.c"
-  "${SIGNALESSENCE_PROJ_SRC}/policy_actions.c"
-  "${SIGNALESSENCE_PROJ_SRC}/spatialfilterconfig.c"
-  "${SIGNALESSENCE_VAD_SRC}/nfbin_f32_anki.c"
-  "${SIGNALESSENCE_VAD_SRC}/svad.c"
-)
+# Create an interface library that provides include paths and links the prebuilt lib
+add_library(signal_essence INTERFACE)
 
 target_link_libraries(signal_essence
-  PRIVATE
+  INTERFACE
   ${SIGNALESSENCE_LIBS}
 )
 
@@ -32,10 +25,8 @@ target_include_directories(signal_essence
 )
 
 target_compile_definitions(signal_essence
-  PUBLIC
+  INTERFACE
   SE_V009=$<BOOL:${SE_V009}>
 )
 
 anki_build_target_license(signal_essence "ANKI" "Commercial")
-
-set_source_files_properties(${SIGNALESSENCE_PROJ_SRC}/policy_actions.c PROPERTIES COMPILE_FLAGS "-Wno-shorten-64-to-32")
