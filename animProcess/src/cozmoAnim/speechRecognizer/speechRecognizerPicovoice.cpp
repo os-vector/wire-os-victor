@@ -70,33 +70,6 @@ bool SpeechRecognizerPicovoice::Init()
 {
   std::lock_guard<std::recursive_mutex> lock(_impl->recogMutex);
 
-  // pid_t pid = fork();
-  // if (pid < 0) {
-  //   LOG_ERROR("SpeechRecognizerPicovoice.Init", "Failed to fork process for pv_server");
-  //   return false;
-  // } else if (pid == 0) {
-  //   execl("/anki/bin/pv_server", "pv_server", (char*)nullptr);
-  //   LOG_ERROR("SpeechRecognizerPicovoice.Init", "Failed to exec pv_server");
-  //   std::exit(EXIT_FAILURE);
-  // } else {
-  //   const char* socketPath = "/dev/socket/_anim_pv_wakeword_";
-  //   int maxRetries = 100;
-  //   int retries = 0;
-  //   while (retries < maxRetries) {
-  //     if (access(socketPath, F_OK) == 0) {
-  //       std::this_thread::sleep_for(std::chrono::milliseconds(300));
-  //       break;
-  //     }
-  //     std::this_thread::sleep_for(std::chrono::milliseconds(50));
-  //     ++retries;
-  //   }
-
-  //   if (retries == maxRetries) {
-  //     LOG_ERROR("SpeechRecognizerPicovoice.Init", "Timeout waiting for pv_server to create socket");
-  //     return false;
-  //   }
-  // }
-
   const char* ppn_to_use = default_ppn;
   struct stat st{};
 

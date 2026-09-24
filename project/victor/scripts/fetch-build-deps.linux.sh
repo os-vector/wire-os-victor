@@ -45,6 +45,6 @@ else
 fi
 
 vlog "Configure audio library"
-./lib/audio/configure.py
+#./lib/audio/configure.py
 
 popd > /dev/null 2>&1
