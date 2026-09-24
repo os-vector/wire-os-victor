@@ -58,6 +58,7 @@
 #include "util/logging/logging.h"
 #include "util/random/randomGenerator.h" // DEBUG
 
+#include <future>
 #include <thread>
 #include <fstream>
 
@@ -265,8 +266,10 @@ Result VisionSystem::Init(const Json::Value& config)
   
   PRINT_CH_INFO(kLogChannelName, "VisionSystem.Init.InstantiatingFaceTracker",
                 "With model path %s.", dataPath.c_str());
-  _faceTracker.reset(new Vision::FaceTracker(_camera, dataPath, config));
-  PRINT_CH_INFO(kLogChannelName, "VisionSystem.Init.DoneInstantiatingFaceTracker", "");
+  std::future<std::unique_ptr<Vision::FaceTracker>> faceTrackerFuture =
+    std::async(std::launch::async, [this, &dataPath, &config]() {
+      return std::unique_ptr<Vision::FaceTracker>(new Vision::FaceTracker(_camera, dataPath, config));
+    });
 
   _motionDetector.reset(new MotionDetector(_camera, _vizManager, config));
 
@@ -349,7 +352,9 @@ Result VisionSystem::Init(const Json::Value& config)
       }
     }
   }
-   
+
+  _faceTracker = faceTrackerFuture.get();
+
   if(!config.isMember("IlluminationDetector"))
   {
     PRINT_NAMED_ERROR("VisionSystem.Init.MissingIlluminationDetectorConfigField", "");
@@ -619,8 +624,12 @@ Result VisionSystem::UpdateCameraParams(Vision::ImageCache& imageCache)
   Result expResult = RESULT_FAIL;
   if(imageCache.HasColor())
   {
+    Tic("UpdateCameraParams.GetRGB");
     const Vision::ImageRGB& inputImage = imageCache.GetRGB();
+    Toc("UpdateCameraParams.GetRGB");
+    Tic("UpdateCameraParams.Compute");
     expResult = _cameraParamsController->ComputeNextCameraParams(inputImage, aeMode, wbMode, useCycling, nextParams);
+    Toc("UpdateCameraParams.Compute");
   }
   else
   {
@@ -1071,7 +1080,9 @@ Result VisionSystem::DetectMarkers(Vision::ImageCache& imageCache,
   {
     case MarkerDetectionCLAHE::Off:
     {
+      Tic("DetectMarkers.GetGray");
       imagePtrs.push_back(&imageCache.GetGray(whichSize));
+      Toc("DetectMarkers.GetGray");
       break;
     }
       
@@ -1850,7 +1861,13 @@ Result VisionSystem::Update(const VisionPoseData& poseData, Vision::ImageCache& 
   {
     Tic("Viz");
 
-    _currentResult.compressedDisplayImg.Compress(imageCache.GetRGB(_vizImageBroadcastSize), _imageCompressQuality);
+    Tic("Viz.GetRGB");
+    const Vision::ImageRGB& vizImage = imageCache.GetRGB(_vizImageBroadcastSize);
+    Toc("Viz.GetRGB");
+
+    Tic("Viz.Compress");
+    _currentResult.compressedDisplayImg.Compress(vizImage, _imageCompressQuality);
+    Toc("Viz.Compress");
 
     Toc("Viz");
 

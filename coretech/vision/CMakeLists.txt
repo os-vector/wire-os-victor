@@ -37,6 +37,13 @@ target_link_libraries(cti_vision
   ${ASAN_LINKER_FLAGS}
 )
 
+if(VICOS)
+  target_link_libraries(cti_vision
+    PUBLIC
+    turbojpeg
+  )
+endif()
+
 target_compile_options(cti_vision
 PRIVATE
   $<$<CONFIG:Debug>:-O0>
