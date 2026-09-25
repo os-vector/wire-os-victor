@@ -36,7 +36,7 @@ namespace Vector {
     
     if (!initialized) {
       struct stat buffer;
-      value = (stat("/data/data/customBackpackLights/off.json", &buffer) == 0);
+      value = (stat("/data/data/customBackpackLights/cubeSpinner/purple/spinner_purple_celebration.json", &buffer) == 0);
       initialized = true;
     }
     
