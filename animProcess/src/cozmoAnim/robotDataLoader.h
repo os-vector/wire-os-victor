@@ -73,7 +73,6 @@ public:
 
   const Json::Value & GetTextToSpeechConfig() const { return _tts_config; }
   const Json::Value & GetWebServerAnimConfig() const { return _ws_config; }
-  const Json::Value & GetMicTriggerConfig() const { return _micTriggerConfig; }
   Animation* GetCannedAnimation(const std::string& name);
   std::vector<std::string> GetAnimationNames();
   
@@ -121,7 +120,6 @@ private:
   
   Json::Value _tts_config;
   Json::Value _ws_config;
-  Json::Value _micTriggerConfig;
   std::string _alexaConfig;
 
   std::unique_ptr<BackpackAnimationTriggerMap> _backpackAnimationTriggerMap;

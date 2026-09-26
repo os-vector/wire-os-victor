@@ -18,7 +18,6 @@
 
 #include "micDataTypes.h"
 #include "coretech/common/engine/robotTimeStamp.h"
-#include "cozmoAnim/micData/micTriggerConfig.h"
 #include "clad/cloud/mic.h"
 #include "util/container/fixedCircularBuffer.h"
 #include "util/global/globalDefinitions.h"

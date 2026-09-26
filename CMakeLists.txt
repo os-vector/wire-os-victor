@@ -248,7 +248,6 @@ include(flatbuffers)
 include(sodium)
 include(aubio)
 include(signalessence)
-include(pryon_lite)
 
 write_license_html()
 check_licenses()

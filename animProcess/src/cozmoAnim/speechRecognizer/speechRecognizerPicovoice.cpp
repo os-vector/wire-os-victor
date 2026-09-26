@@ -7,6 +7,7 @@
 #include "pv_porcupine.h"
 #include "util/logging/logging.h"
 
+#include <algorithm>
 #include <vector>
 #include <mutex>
 
@@ -22,8 +23,11 @@
 const char* model_path   = "/anki/data/assets/cozmo_resources/assets/picovoice/porcupine_params.pv";
 const char* custom_ppn   = "/data/data/com.anki.victor/persistent/picovoice/custom_1-5-0.ppn";
 const char* default_ppn  = "/anki/data/assets/cozmo_resources/assets/picovoice/hey_vector.ppn";
+const char* alexa_ppn    = "/anki/data/assets/cozmo_resources/assets/picovoice/alexa.ppn";
 const char* sensitivity_path = "/data/data/com.anki.victor/persistent/picovoice/sensitivity2";
 float default_sensitivity = 0.45f;
+const uint32_t frame_length = 512;
+const uint64_t keyword_length_samples = 16 * 800;
 
 namespace Anki {
 namespace Vector {
@@ -33,6 +37,8 @@ namespace Vector {
 struct SpeechRecognizerPicovoice::SpeechRecognizerPicovoiceData
 {
   std::vector<AudioUtil::AudioSample> audioBuffer;
+  std::vector<std::string> keywords;
+  uint64_t sampleCount = 0;
   pv_porcupine_object_t* pvObj = nullptr;
   std::recursive_mutex recogMutex;
   bool disabled = true;
@@ -66,14 +72,14 @@ SpeechRecognizerPicovoice& SpeechRecognizerPicovoice::operator=(SpeechRecognizer
   return *this;
 }
 
-bool SpeechRecognizerPicovoice::Init()
+bool SpeechRecognizerPicovoice::Init(bool useHeyVector, bool useAlexa, float alexaSensitivity)
 {
   std::lock_guard<std::recursive_mutex> lock(_impl->recogMutex);
 
   const char* ppn_to_use = default_ppn;
   struct stat st{};
 
-  _impl->audioBuffer.reserve(512 * 2);
+  _impl->audioBuffer.reserve(frame_length * 2);
 
   if (_impl->pvObj)
   {
@@ -100,19 +106,51 @@ bool SpeechRecognizerPicovoice::Init()
   }
 
 
-  LOG_INFO("SpeechRecognizerPicovoice.Init", "Using sensitivity: %.4f", sensitivity);
-  pv_status_t status = pv_porcupine_init(model_path, ppn_to_use, sensitivity, &_impl->pvObj);
+  std::vector<const char*> ppns;
+  std::vector<float> sensitivities;
+  _impl->keywords.clear();
+  if (useHeyVector) {
+    ppns.push_back(ppn_to_use);
+    sensitivities.push_back(sensitivity);
+    _impl->keywords.push_back(kHeyVectorKeyword);
+  }
+  if (useAlexa) {
+    ppns.push_back(alexa_ppn);
+    sensitivities.push_back(alexaSensitivity);
+    _impl->keywords.push_back(kAlexaKeyword);
+  }
+
+  const auto init = [&]() {
+    return pv_porcupine_multiple_keywords_init(model_path, (int) ppns.size(), ppns.data(), sensitivities.data(),
+                                               &_impl->pvObj);
+  };
+
+  LOG_INFO("SpeechRecognizerPicovoice.Init", "Using sensitivity: %.4f, alexa sensitivity: %.4f",
+           sensitivity, alexaSensitivity);
+  pv_status_t status = init();
 
   if (status != PV_STATUS_SUCCESS) {
-      if (ppn_to_use == custom_ppn) {
+      if (useHeyVector && ppn_to_use == custom_ppn) {
           LOG_INFO("SpeechRecognizerPicovoice.Init", "loading default pv model");
-          ppn_to_use = default_ppn;
-          status = pv_porcupine_init(model_path, ppn_to_use, sensitivity, &_impl->pvObj);
+          ppns.front() = default_ppn;
+          status = init();
+      }
+  }
+
+  if (status != PV_STATUS_SUCCESS) {
+      if (useHeyVector && useAlexa) {
+          LOG_WARNING("SpeechRecognizerPicovoice.Init", "loading without alexa keyword");
+          ppns.pop_back();
+          sensitivities.pop_back();
+          _impl->keywords.pop_back();
+          status = init();
       }
   }
 
   if (status != PV_STATUS_SUCCESS) {
       LOG_ERROR("SpeechRecognizerPicovoice.Init", "error setting up recognizer :(");
+      _impl->pvObj = nullptr;
+      _impl->keywords.clear();
       return false;
   }
 
@@ -126,35 +164,36 @@ void SpeechRecognizerPicovoice::Update(const AudioUtil::AudioSample* audioData, 
 {
     std::lock_guard<std::recursive_mutex> lock(_impl->recogMutex);
 
-    if (_impl->disabled)
+    if (_impl->disabled || _impl->pvObj == nullptr)
     {
         return;
     }
-    uint32_t frameLength = 512;
 
     _impl->audioBuffer.insert(_impl->audioBuffer.end(), audioData, audioData + audioDataLen);
+    _impl->sampleCount += audioDataLen;
 
-    while (_impl->audioBuffer.size() >= frameLength)
+    while (_impl->audioBuffer.size() >= frame_length)
     {
-        std::vector<AudioUtil::AudioSample> frame(_impl->audioBuffer.begin(),
-                                                  _impl->audioBuffer.begin() + frameLength);
-
-        bool result = false;
-        if (pv_porcupine_process(_impl->pvObj, frame.data(), &result) != PV_STATUS_SUCCESS) {
+        int keywordIndex = -1;
+        if (pv_porcupine_multiple_keywords_process(_impl->pvObj, _impl->audioBuffer.data(), &keywordIndex) != PV_STATUS_SUCCESS) {
             LOG_ERROR("SpeechRecognizerPicovoice.Update", "pv process error");
             return;
         }
-        if (result) {
+        if (keywordIndex >= 0 && keywordIndex < (int) _impl->keywords.size()) {
+            const uint64_t endSampleIdx = _impl->sampleCount - (_impl->audioBuffer.size() - frame_length);
+            const uint64_t beginSampleIdx = endSampleIdx - std::min(endSampleIdx, keyword_length_samples);
             AudioUtil::SpeechRecognizerCallbackInfo info{
-                .result = "Wake word detected",
-                .startTime_ms = 0,
-                .endTime_ms = 0,
+                .result = _impl->keywords[keywordIndex],
+                .startTime_ms = static_cast<int>(beginSampleIdx / 16),
+                .endTime_ms = static_cast<int>(endSampleIdx / 16),
+                .startSampleIndex = beginSampleIdx,
+                .endSampleIndex = endSampleIdx,
                 .score = 0.0f
             };
             DoCallback(info);
         }
         _impl->audioBuffer.erase(_impl->audioBuffer.begin(),
-                                 _impl->audioBuffer.begin() + frameLength);
+                                 _impl->audioBuffer.begin() + frame_length);
     }
 }
 
@@ -162,6 +201,18 @@ void SpeechRecognizerPicovoice::Reset()
 {
   std::lock_guard<std::recursive_mutex> lock(_impl->recogMutex);
   _impl->reset = true;
+}
+
+bool SpeechRecognizerPicovoice::HasKeyword(const std::string& keyword) const
+{
+  std::lock_guard<std::recursive_mutex> lock(_impl->recogMutex);
+  return std::find(_impl->keywords.begin(), _impl->keywords.end(), keyword) != _impl->keywords.end();
+}
+
+uint64_t SpeechRecognizerPicovoice::GetSampleCount() const
+{
+  std::lock_guard<std::recursive_mutex> lock(_impl->recogMutex);
+  return _impl->sampleCount;
 }
 
 void SpeechRecognizerPicovoice::StartInternal()

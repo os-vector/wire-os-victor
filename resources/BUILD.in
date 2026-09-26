@@ -7,7 +7,6 @@ asset_project(
                 ('assets', 'cubeFirmware/cube.dfu'),
                 ('assets', 'LocalizedStrings/**/*.json'),
 		('assets', 'faceOverlays/*.jpg'),
-                ('3rd/pryon_lite', 'pryonSpeechRecModels/**/*.bin'),
                 ('externals/animation-assets', 'animations/**/*.bin'),
                 ('externals/animation-assets', 'animationGroups/**/*.json'),
                 ('externals/animation-assets', 'sprites/**/*.png'),

@@ -48,7 +48,7 @@ namespace Anim {
   class AnimContext;
 }
 class SpeechRecognizerSystem;
-class SpeechRecognizerPryonLite;
+class SpeechRecognizerPicovoice;
 }
 }
   
@@ -69,9 +69,6 @@ public:
 
   // The recognizer runs when active
   void SetRecognizerActivate( bool activate );
-
-  // Locale has been updated notify worker thread to change models
-  void PendingLocaleUpdate();
 
   // Check if the class was properly constructed
   bool GetIsReady() const { return _isInitialized; }
@@ -95,7 +92,7 @@ private:
 
   // Handle to objects
   const Anim::AnimContext*                  _context = nullptr;         // This a pointer to a unique_ptr()'s instance
-  SpeechRecognizerPryonLite*                _recognizer = nullptr;      // This a pointer to a unique_ptr()'s instance
+  SpeechRecognizerPicovoice*                _recognizer = nullptr;     // This a pointer to a unique_ptr()'s instance
   SpeechRecognizerSystem&                   _speechRecSys;
   SpeexResamplerState*                      _resamplerState = nullptr;
   AudioEngine::PlugIns::AkAlsaSinkPlugIn*   _sinkPlugin = nullptr;
@@ -104,7 +101,6 @@ private:
   std::atomic_bool                _isActive{ false };
   bool                            _isInitialized = false;
   bool                            _processThreadStop = false;
-  bool                            _pendingLocaleUpdate = false;
 
   // Buffers
   template <class T, size_t kCapacity>
