@@ -122,10 +122,9 @@ MicDataSystem::MicDataSystem(Util::Data::DataPlatform* dataPlatform,
 , _abortAlexaScreenDueToHeyVector(false)
 {
   const std::string& dataWriteLocation = dataPlatform->pathToResource(Util::Data::Scope::Cache, "micdata");
-  const std::string& triggerDataDir = dataPlatform->pathToResource(Util::Data::Scope::Resources, "assets");
   _writeLocationDir = dataWriteLocation;
   _micDataProcessor.reset(new MicDataProcessor(_context, this, dataWriteLocation));
-  _speechRecognizerSystem.reset(new SpeechRecognizerSystem(_context, this, triggerDataDir));
+  _speechRecognizerSystem.reset(new SpeechRecognizerSystem(_context));
   
   _persistentFolder = Util::FileUtils::AddTrailingFileSeparator( dataPlatform->pathToResource(Util::Data::Scope::Persistent, "") );
 
@@ -170,7 +169,7 @@ void MicDataSystem::Init(const Anim::RobotDataLoader& dataLoader)
     _micDataProcessor->VoiceTriggerWordDetection( info );
     SendRecognizerDasLog( info, nullptr );
   };
-  _speechRecognizerSystem->InitVector(dataLoader, _locale, callback);
+  _speechRecognizerSystem->InitVector(callback);
   _micDataProcessor->Init();
   
   if( Util::FileUtils::FileExists(_persistentFolder + kMicSettingsFile) ) {

@@ -8,7 +8,6 @@ include(flatbuffers)
 include(opencv)
 include(picovoice)
 include(text2speech)
-include(pryon_lite)
 include(robot_core)
 
 anki_build_cxx_library(victor_anim ${ANKI_SRCLIST_DIR} STATIC)
@@ -60,7 +59,6 @@ target_link_libraries(victor_anim
   ${FLATBUFFERS_LIBS}
   signal_essence
   ${TEXT2SPEECH_LIBS}
-  ${PRYON_LITE_LIBS}
   ${SPEEXDSP_LIBS}
   # platform
   ${PLATFORM_LIBS}

@@ -102,18 +102,6 @@ void RobotDataLoader::LoadConfigData()
                   ws_config.c_str());
     }
   }
-  // Mic data config
-  {
-    const std::string& triggerConfigFile = "config/micData/micTriggerConfig.json";
-    const bool success = _platform->readAsJson(Util::Data::Scope::Resources, triggerConfigFile, _micTriggerConfig);
-    if (!success)
-    {
-      LOG_ERROR("RobotDataLoader.MicTriggerConfigNotFound",
-                "Mic trigger config file %s not found or failed to parse",
-                triggerConfigFile.c_str());
-    }
-  }
-
   {
     const std::string& alexaConfigFile = "config/alexa.json";
     const auto path = _platform->GetResourcePath(alexaConfigFile);

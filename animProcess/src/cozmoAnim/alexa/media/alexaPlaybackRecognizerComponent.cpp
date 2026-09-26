@@ -19,7 +19,7 @@
 #include "cozmoAnim/animContext.h"
 #include "cozmoAnim/audio/cozmoAudioController.h"
 #include "cozmoAnim/micData/micDataSystem.h"
-#include "cozmoAnim/speechRecognizer/speechRecognizerPryonLite.h"
+#include "cozmoAnim/speechRecognizer/speechRecognizerPicovoice.h"
 #include "cozmoAnim/speechRecognizer/speechRecognizerSystem.h"
 #include "speex/speex_resampler.h"
 #include "util/logging/logging.h"
@@ -50,7 +50,6 @@ AlexaPlaybackRecognizerComponent::~AlexaPlaybackRecognizerComponent()
 
   // Stop Worker thread
   _processThreadStop = true;
-  _pendingLocaleUpdate = false;
   _processAudioThreadCondition.notify_all();
   _processAudioThread.join();
 
@@ -88,7 +87,7 @@ bool AlexaPlaybackRecognizerComponent::Init()
     LOG_ERROR("AlexaPlaybackRecognizerComponent._speechRecSys._alexaPlaybackTrigger.IsNull", "");
     return false;
   }
-  _recognizer = _speechRecSys._alexaPlaybackTrigger->recognizer.get();
+  _recognizer = _speechRecSys._alexaPlaybackTrigger.get();
   if ( _recognizer == nullptr ) {
     LOG_ERROR("AlexaPlaybackRecognizerComponent._recognizer", "");
     return false;
@@ -121,14 +120,6 @@ void AlexaPlaybackRecognizerComponent::SetRecognizerActivate( bool activate )
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void AlexaPlaybackRecognizerComponent::PendingLocaleUpdate()
-{
-  // Set flag and notify worker thread
-  _pendingLocaleUpdate = true;
-  _processAudioThreadCondition.notify_all();
-}
-  
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void AlexaPlaybackRecognizerComponent::SinkPluginCallback( const SinkPluginTypes::AudioChunk& chunk, bool hasData )
 {
   // Check if Alexa is active and the callback period has audio data
@@ -160,7 +151,7 @@ void AlexaPlaybackRecognizerComponent::ProcessAudioLoop()
     {
       std::unique_lock<std::mutex> lock( _audioEngOutputBufferMutex );
       const auto waitFunc = [this] {
-        return !_audioEngOutBuffer.empty() || _pendingLocaleUpdate || _processThreadStop;
+        return !_audioEngOutBuffer.empty() || _processThreadStop;
       };
       _processAudioThreadCondition.wait( lock, waitFunc );
       if ( _processThreadStop ) {
@@ -182,14 +173,6 @@ void AlexaPlaybackRecognizerComponent::ProcessAudioLoop()
       inData = _validOutBufferPtrs.front();
       _validOutBufferPtrs.pop_front();
       ProcessAudio( inData );
-    }
-    // Check if locale needs to be updated
-    if ( _pendingLocaleUpdate && _isInitialized ) {
-      auto* playbackTrigger = _speechRecSys._alexaPlaybackTrigger.get();
-      ASSERT_NAMED(playbackTrigger != nullptr,
-                   "AlexaPlaybackRecognizerComponent.ProcessAudioLoop.playbackTrigger.IsNull");
-      //_speechRecSys.ApplySpeechRecognizerLocaleUpdate( *playbackTrigger );
-      _pendingLocaleUpdate = false;
     }
   }
 }
