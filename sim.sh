@@ -36,7 +36,7 @@ if [[ $? != "0" || $OS_LATEST == *"404 page"* || $OS_LATEST == "" ]]; then
 	echo "either curl isn't installed or we can't access the server"
 	if [[ -n $(ls $TOPLEVEL/.sim/dvcbs/*/apq8009-robot-sysfs.img) ]]; then
 		# terrible
-		OS_LATEST=$(ls "$TOPLEVEL/.sim/dvcbs" | \grep 3)
+		OS_LATEST=$(ls "$TOPLEVEL/.sim/dvcbs" | \grep "3.0.2")
 		echo "i see $OS_LATEST is already there, using that"
 	else
 		echo "if you're cozmoing, run this script with internet once so required files can be downloaded"

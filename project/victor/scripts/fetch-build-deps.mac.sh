@@ -55,7 +55,7 @@ else
 	vlog "Not extracting animation assets"
 fi
 
-vlog "Configure audio library"
-./lib/audio/configure.py
+#vlog "Configure audio library"
+#./lib/audio/configure.py
 
 popd > /dev/null 2>&1
