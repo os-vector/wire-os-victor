@@ -44,6 +44,7 @@ target_link_libraries(robot_hal
 target_include_directories(robot_hal
   PRIVATE
   $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/robot/syscon>
+  ${ANKI_BUILD_INFO_DIR}
   PUBLIC
   $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/robot/hal/include>
   $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/robot/hal/sim/include>

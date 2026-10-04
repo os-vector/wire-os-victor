@@ -16,7 +16,7 @@
 
 set(ANKI_BUILD_CXX_COMPILE_OPTIONS
   $<$<CONFIG:Debug>:-O0>
-  $<$<CONFIG:Release>:-Os>
+  $<$<CONFIG:Release>:-O2>
   $<$<BOOL:${MACOSX}>:-fobjc-arc>
   $<$<BOOL:${IOS}>:-fobjc-arc>
   $<$<AND:$<CXX_COMPILER_ID:AppleClang>,$<VERSION_GREATER_EQUAL:${CMAKE_CXX_COMPILER_VERSION},9.0>>:-fdiagnostics-absolute-paths>
