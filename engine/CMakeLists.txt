@@ -120,6 +120,8 @@ target_include_directories(cozmo_engine
 )
 
 if (VICOS)
+  target_link_options(cozmo_engine PRIVATE -Wl,--exclude-libs,ALL)
+
   # TODO: support tools on mac
   add_subdirectory(tools)
 

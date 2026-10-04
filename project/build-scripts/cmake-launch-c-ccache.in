@@ -11,7 +11,7 @@ fi
 export CCACHE_CPP2=true
 export CCACHE_MAXSIZE=10G
 export CCACHE_BASEDIR="${CMAKE_SOURCE_DIR}"
-export CCACHE_HARDLINK=true
+#export CCACHE_HARDLINK=true
 # caching is conservative by default, for more agressive caching, uncomment the next line
 export CCACHE_SLOPPINESS=include_file_mtime
 #EXTRA_ARGS="$LD_LIBRARY_PATH"

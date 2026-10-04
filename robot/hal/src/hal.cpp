@@ -33,6 +33,8 @@
 #include "clad/robotInterface/messageRobotToEngine_send_helper.h"
 #include "clad/types/proxMessages.h"
 
+#include "ankiBuildSha.h"
+
 #include <errno.h>
 
 // will log all the touch sensor data to /data/misc/touch.csv

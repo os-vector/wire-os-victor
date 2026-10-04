@@ -105,8 +105,12 @@ if (STANDALONE_SIM)
   )
 endif()
 
-add_definitions(-DANKI_BUILD_SHA="${ANKI_BUILD_SHA}")
-add_definitions(-DANKI_BUILD_BRANCH="${ANKI_BUILD_BRANCH}")
+set(ANKI_BUILD_INFO_DIR "${CMAKE_BINARY_DIR}/buildInfo")
+file(CONFIGURE OUTPUT "${ANKI_BUILD_INFO_DIR}/ankiBuildSha.h" CONTENT
+"#pragma once
+#define ANKI_BUILD_SHA \"${ANKI_BUILD_SHA}\"
+#define ANKI_BUILD_BRANCH \"${ANKI_BUILD_BRANCH}\"
+")
 
 #
 # Pass ANKI defines from the command-line to all targets

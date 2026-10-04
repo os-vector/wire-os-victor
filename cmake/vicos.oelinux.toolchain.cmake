@@ -149,7 +149,8 @@ endif()
 list(APPEND VICOS_COMPILER_FLAGS
 	-march=armv7-a
 	-mfloat-abi=hard
-	-mfpu=neon-vfpv4)
+	-mfpu=neon-vfpv4
+	-mcpu=cortex-a7)
 list(APPEND VICOS_LINKER_FLAGS
 	-Wl,--fix-cortex-a8)
 

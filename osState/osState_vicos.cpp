@@ -26,6 +26,8 @@
 
 #include "anki/cozmo/shared/factory/emrHelper.h"
 
+#include "ankiBuildSha.h"
+
 // For getting our ip address
 #include <arpa/inet.h>
 #include <ctype.h>
