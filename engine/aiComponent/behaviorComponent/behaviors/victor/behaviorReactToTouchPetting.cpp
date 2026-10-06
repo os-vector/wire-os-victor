@@ -140,7 +140,9 @@ void BehaviorReactToTouchPetting::AlwaysHandleInScope(const EngineToGameEvent& e
         auto touchTimePress = BaseStationTimer::getInstance()->GetCurrentTimeInSeconds();
         _checkForTransitionTime = touchTimePress + _timeTilTouchCheck;
         _numPressesAtCurrentBlissLevel++;
-        GetBEI().GetBackpackLightComponent().SetBackpackAnimation(BackpackAnimationTrigger::Petting);
+        if (IsActivated()) {
+          GetBEI().GetBackpackLightComponent().SetBackpackAnimation(BackpackAnimationTrigger::Petting);
+        }
       } else {
         auto touchTimeRelease = BaseStationTimer::getInstance()->GetCurrentTimeInSeconds();
         _checkForTimeoutTimeBliss = touchTimeRelease + _blissTimeout;
