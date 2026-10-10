@@ -22,7 +22,7 @@ public:
   static constexpr const char* kHeyVectorKeyword = "HEY_VECTOR";
   static constexpr const char* kAlexaKeyword = "ALEXA";
 
-  bool Init(bool useHeyVector, bool useAlexa, float alexaSensitivity);
+  bool Init(bool useHeyVector, bool useAlexa);
 
   virtual void Update(const AudioUtil::AudioSample* audioData, unsigned int audioDataLen) override;
 

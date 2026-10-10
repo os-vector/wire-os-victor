@@ -835,7 +835,7 @@ void MicDataSystem::SetAlexaState(AlexaSimpleState state)
       Alexa* alexa = _context->GetAlexa();
       ShowAudioStreamStateManager* showStreamState = _context->GetShowAudioStreamStateManager();
       if( (alexa != nullptr) && showStreamState->HasAnyAlexaResponse() ) {
-        alexa->NotifyOfWakeWord( info.startSampleIndex, info.endSampleIndex );
+        alexa->NotifyOfTapToTalk(false);
       }
       SendRecognizerDasLog( info, EnumToString(_alexaState) );
     };
