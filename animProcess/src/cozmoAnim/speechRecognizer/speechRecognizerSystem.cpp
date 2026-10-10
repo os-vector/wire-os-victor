@@ -43,7 +43,6 @@ namespace {
 #define CONSOLE_GROUP_ALEXA "SpeechRecognizer.Alexa"
 #define CONSOLE_GROUP_ALEXA_PLAYBACK "SpeechRecognizer.AlexaPlayback"
 
-CONSOLE_VAR_RANGED(float, kAlexaSensitivity, CONSOLE_GROUP_ALEXA, 0.5f, 0.0f, 1.0f);
 CONSOLE_VAR(bool, kSaveRawMicInput, CONSOLE_GROUP_ALEXA, false);
 // 0: don't run; 1: compute power as if _notchDetectorActive; 2: analyze power every tick
 CONSOLE_VAR_RANGED(unsigned int, kForceRunNotchDetector, CONSOLE_GROUP_ALEXA, 0, 0, 2);
@@ -92,7 +91,7 @@ void SpeechRecognizerSystem::InitVector(TriggerWordDetectedCallback callback)
   }
 
   _victorTrigger = std::make_unique<SpeechRecognizerPicovoice>();
-  _victorTrigger->Init(true, true, kAlexaSensitivity);
+  _victorTrigger->Init(true, true);
   _victorTrigger->SetCallback([callback=std::move(callback), this](const AudioUtil::SpeechRecognizerCallbackInfo& info)
   {
     if (info.result != SpeechRecognizerPicovoice::kAlexaKeyword) {
@@ -265,7 +264,7 @@ void SpeechRecognizerSystem::InitAlexaPlayback(TriggerWordDetectedCallback callb
 
   _alexaPlaybackTrigger = std::make_unique<SpeechRecognizerPicovoice>();
   _alexaPlaybackTrigger->SetCallback(callback);
-  _alexaPlaybackTrigger->Init(false, true, 1.0f);
+  _alexaPlaybackTrigger->Init(false, true);
 }
 
 void SpeechRecognizerSystem::UpdateAlexaActiveState()

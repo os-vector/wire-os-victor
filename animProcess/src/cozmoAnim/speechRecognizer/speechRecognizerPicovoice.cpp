@@ -21,11 +21,19 @@
 #include <sys/stat.h>
 
 const char* model_path   = "/anki/data/assets/cozmo_resources/assets/picovoice/porcupine_params.pv";
+
+// alexa
+const char* alexa_ppn    = "/anki/data/assets/cozmo_resources/assets/picovoice/alexa.ppn";
+const char* custom_alexa_ppn   = "/data/data/com.anki.victor/persistent/picovoice/custom_alexa.ppn";
+const char* sensitivity_path_alexa = "/data/data/com.anki.victor/persistent/picovoice/sensitivity_alexa";
+float default_sensitivity_alexa = 0.50f;
+
+// victor
 const char* custom_ppn   = "/data/data/com.anki.victor/persistent/picovoice/custom_1-5-0.ppn";
 const char* default_ppn  = "/anki/data/assets/cozmo_resources/assets/picovoice/hey_vector.ppn";
-const char* alexa_ppn    = "/anki/data/assets/cozmo_resources/assets/picovoice/alexa.ppn";
-const char* sensitivity_path = "/data/data/com.anki.victor/persistent/picovoice/sensitivity2";
-float default_sensitivity = 0.45f;
+const char* sensitivity_path_victor = "/data/data/com.anki.victor/persistent/picovoice/sensitivity2";
+float default_sensitivity_victor = 0.60f;
+
 const uint32_t frame_length = 512;
 const uint64_t keyword_length_samples = 16 * 800;
 
@@ -72,11 +80,12 @@ SpeechRecognizerPicovoice& SpeechRecognizerPicovoice::operator=(SpeechRecognizer
   return *this;
 }
 
-bool SpeechRecognizerPicovoice::Init(bool useHeyVector, bool useAlexa, float alexaSensitivity)
+bool SpeechRecognizerPicovoice::Init(bool useHeyVector, bool useAlexa)
 {
   std::lock_guard<std::recursive_mutex> lock(_impl->recogMutex);
 
-  const char* ppn_to_use = default_ppn;
+  const char* ppn_to_use_alexa = alexa_ppn;
+  const char* ppn_to_use_victor = default_ppn;
   struct stat st{};
 
   _impl->audioBuffer.reserve(frame_length * 2);
@@ -87,37 +96,55 @@ bool SpeechRecognizerPicovoice::Init(bool useHeyVector, bool useAlexa, float ale
     _impl->pvObj = nullptr;
   }
 
-  if (stat(custom_ppn, &st) == 0) {
-      ppn_to_use = custom_ppn;
+  if (stat(custom_alexa_ppn, &st) == 0) {
+      ppn_to_use_alexa = custom_alexa_ppn;
   }
 
-  float sensitivity = default_sensitivity;
+  if (stat(custom_ppn, &st) == 0) {
+      ppn_to_use_victor = custom_ppn;
+  }
 
-  std::ifstream sensFile(sensitivity_path);
+  float sensitivity_alexa = default_sensitivity_alexa;
+  float sensitivity_victor = default_sensitivity_victor;
+
+  std::ifstream sensFileAlexa(sensitivity_path_alexa);
+  if (sensFileAlexa.is_open()) {
+    std::string line;
+    if (std::getline(sensFileAlexa, line)) {
+      std::istringstream iss(line);
+      float val = 0.0f;
+      if ((iss >> val) && val >= 0.0f && val <= 1.0f) {
+        sensitivity_alexa = val;
+      }
+    }
+  }
+
+  std::ifstream sensFile(sensitivity_path_victor);
   if (sensFile.is_open()) {
     std::string line;
     if (std::getline(sensFile, line)) {
       std::istringstream iss(line);
       float val = 0.0f;
       if ((iss >> val) && val >= 0.0f && val <= 1.0f) {
-        sensitivity = val;
+        sensitivity_victor = val;
       }
     }
   }
 
-
   std::vector<const char*> ppns;
   std::vector<float> sensitivities;
   _impl->keywords.clear();
-  if (useHeyVector) {
-    ppns.push_back(ppn_to_use);
-    sensitivities.push_back(sensitivity);
-    _impl->keywords.push_back(kHeyVectorKeyword);
-  }
+
   if (useAlexa) {
-    ppns.push_back(alexa_ppn);
-    sensitivities.push_back(alexaSensitivity);
+    ppns.push_back(ppn_to_use_alexa);
+    sensitivities.push_back(sensitivity_alexa);
     _impl->keywords.push_back(kAlexaKeyword);
+  }
+
+  if (useHeyVector) {
+    ppns.push_back(ppn_to_use_victor);
+    sensitivities.push_back(sensitivity_victor);
+    _impl->keywords.push_back(kHeyVectorKeyword);
   }
 
   const auto init = [&]() {
@@ -126,11 +153,19 @@ bool SpeechRecognizerPicovoice::Init(bool useHeyVector, bool useAlexa, float ale
   };
 
   LOG_INFO("SpeechRecognizerPicovoice.Init", "Using sensitivity: %.4f, alexa sensitivity: %.4f",
-           sensitivity, alexaSensitivity);
+           sensitivity_victor, sensitivity_alexa);
   pv_status_t status = init();
 
   if (status != PV_STATUS_SUCCESS) {
-      if (useHeyVector && ppn_to_use == custom_ppn) {
+      if (useHeyVector && ppn_to_use_victor == custom_ppn) {
+          LOG_INFO("SpeechRecognizerPicovoice.Init", "loading default pv model");
+          ppns.front() = default_ppn;
+          status = init();
+      }
+  }
+
+  if (status != PV_STATUS_SUCCESS) {
+      if (useHeyVector && ppn_to_use_alexa == custom_alexa_ppn) {
           LOG_INFO("SpeechRecognizerPicovoice.Init", "loading default pv model");
           ppns.front() = default_ppn;
           status = init();
