@@ -120,6 +120,7 @@ foreach(opt ${opts})
   if(opt STREQUAL "ANKI_BUILD_SHA")
   elseif(opt STREQUAL "ANKI_BUILD_BRANCH")
     # ignore, set previously
+  elseif((opt STREQUAL "ANKI_PROTOC") OR (opt STREQUAL "ANKI_GO_COMPILER") OR (opt STREQUAL "ANKI_UPX") OR (opt STREQUAL "ANKI_GO_BIN_PATH"))
 
   # we whitelist which defines are allowed to be added to prevent hidden, unexpected defines from sneaking in
   elseif((opt MATCHES "ANKI_") OR (opt MATCHES "REMOTE_CONSOLE_ENABLED") OR (opt MATCHES "DO_DEV_POSE_CHECKS"))
