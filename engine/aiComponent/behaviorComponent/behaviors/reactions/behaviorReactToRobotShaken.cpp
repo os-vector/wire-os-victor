@@ -19,6 +19,7 @@
 
 #include "coretech/common/engine/jsonTools.h"
 #include "coretech/common/engine/utils/timer.h"
+#include "osState/wallTime.h"
 #include "util/logging/DAS.h"
 
 
@@ -32,6 +33,11 @@ namespace{
   const char* kKey_RenderInEyeHue             = "renderInEyeHue";
   const char* kKey_AnimGetIn                  = "getInAnimation";
   const char* kKey_Animations                 = "shakeAnimations";
+
+  // Same but snowglobe specific
+  const char* kKey_RenderInEyeHueSnowglobe    = "renderInEyeHueSnowGlobe";
+  const char* kKey_AnimGetInSnowGlobe         = "getInAnimationSnowGlobe";
+  const char* kKey_AnimationsSnowGlobe        = "shakeAnimationsSnowGlobe";
 
   // local to struct ShakeReaction
   const char* kKey_TriggerThreshold           = "threshold";
@@ -62,6 +68,11 @@ void BehaviorReactToRobotShaken::GetBehaviorJsonKeys(std::set<const char*>& expe
   expectedKeys.insert( kKey_Animations );
   expectedKeys.insert( kKey_AnimGetIn );
   expectedKeys.insert( kKey_RenderInEyeHue );
+
+  // Snowglobe specific
+  expectedKeys.insert( kKey_AnimationsSnowGlobe );
+  expectedKeys.insert( kKey_AnimGetInSnowGlobe );
+  expectedKeys.insert( kKey_RenderInEyeHueSnowglobe );
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -249,21 +260,38 @@ BehaviorReactToRobotShaken::ShakeReaction::ShakeReaction( const Json::Value& con
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+bool ShouldUseSnowglobe() {
+  static bool initialized = false;
+  static bool useSnowglobe = false;
+
+  if (!initialized) {
+    struct tm localDate;
+    WallTime::getInstance()->GetLocalTime(localDate);
+    const int currentMonth = localDate.tm_mon;
+
+    if (currentMonth >= 10 || currentMonth <= 1) {
+      useSnowglobe = true;
+    }
+  }
+  return useSnowglobe;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void BehaviorReactToRobotShaken::LoadReactionAnimations( const Json::Value& config )
 {
   const std::string& debugString = "BehaviorReactToRobotShaken.LoadReactionAnimations";
 
   // Do we want to render these animations in the eye hue, or use the rgb from the animations themselves
-  _iVars.renderInEyeHue = config.get( kKey_RenderInEyeHue, true ).asBool();
+  _iVars.renderInEyeHue = config.get( ShouldUseSnowglobe() ? kKey_RenderInEyeHueSnowglobe : kKey_RenderInEyeHue, true ).asBool();
 
   // load our get-in animation
-  ASSERT_NAMED_EVENT( config.isMember(kKey_AnimGetIn), debugString.c_str(), "must specify get-in animation (%s)", kKey_AnimGetIn );
-  const std::string& getInAnimString = JsonTools::ParseString( config, kKey_AnimGetIn, debugString );
+  ASSERT_NAMED_EVENT( config.isMember( ShouldUseSnowglobe() ? kKey_AnimGetIn : kKey_AnimGetIn ), debugString.c_str(), "must specify get-in animation (%s)", ShouldUseSnowglobe() ? kKey_AnimGetIn : kKey_AnimGetIn );
+  const std::string& getInAnimString = JsonTools::ParseString( config, ShouldUseSnowglobe() ? kKey_AnimGetInSnowGlobe : kKey_AnimGetIn, debugString );
   _iVars.getInAnimation = AnimationTriggerFromString( getInAnimString );
 
   // load all of our reaction animations
-  ASSERT_NAMED_EVENT( config.isMember( kKey_Animations ), debugString.c_str(), "missing required field (%s)", kKey_Animations );
-  for ( const auto& reactionConfig : config[kKey_Animations] )
+  ASSERT_NAMED_EVENT( config.isMember( ShouldUseSnowglobe() ? kKey_AnimationsSnowGlobe : kKey_Animations ), debugString.c_str(), "missing required field (%s)", ShouldUseSnowglobe() ? kKey_AnimationsSnowGlobe : kKey_Animations );
+  for ( const auto& reactionConfig : config[ShouldUseSnowglobe() ? kKey_AnimationsSnowGlobe : kKey_Animations] )
   {
     _iVars.shakeReactions.emplace_back( reactionConfig );
   }
