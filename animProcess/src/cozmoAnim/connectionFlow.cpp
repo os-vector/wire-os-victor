@@ -28,6 +28,7 @@
 #include "clad/robotInterface/messageEngineToRobot_sendAnimToRobot_helper.h"
 
 #include "util/console/consoleSystem.h"
+#include "util/fileUtils/fileUtils.h"
 #include "util/logging/logging.h"
 
 #include "opencv2/imgproc.hpp"
@@ -44,30 +45,28 @@ namespace {
 u32 _pin = 123456;
 
 const f32 kRobotNameScale = 0.7f;
-const std::string kURL = "v.pvic.xyz";
+const std::string kURLDef = "v.pvic.xyz";
+const std::string kURLWP = "wp.pvic.xyz";
 const ColorRGBA   kColor(0.9f, 0.5f, 0.9f, 1.f);
 
 const char* kShowPinScreenSpriteName = "pairing_icon_key";
+
+bool usingWP = Util::FileUtils::FileExists("/data/data/server_config.json");
 
 bool s_enteredAnyScreen = false;
 }
 
 // Draws BLE name and url to screen
 bool DrawStartPairingScreen(Anim::AnimationStreamer* animStreamer)
-{
-  // Robot name will be empty until switchboard has set the property
-  std::string robotName = OSState::getInstance()->GetRobotName();
-  if(robotName == "")
-  {
-    return false;
-  }
-  
+{  
   s_enteredAnyScreen = true;  
 
   auto* img = new Vision::ImageRGBA(FACE_DISPLAY_HEIGHT, FACE_DISPLAY_WIDTH);
   img->FillWith(Vision::PixelRGBA(0, 0));
 
-  img->DrawTextCenteredHorizontally(robotName, cv::QT_FONT_NORMAL, kRobotNameScale, 1, kColor, 15, false);
+  img->DrawTextCenteredHorizontally("Setup Robot at:", cv::QT_FONT_NORMAL, kRobotNameScale, 1, kColor, 15, false);
+
+  std::string kURL = usingWP ? kURLWP : kURLDef;
 
   cv::Size textSize;
   float scale = 0;
