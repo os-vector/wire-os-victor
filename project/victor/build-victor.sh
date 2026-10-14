@@ -181,6 +181,12 @@ if [ -z "${CMAKE_EXE+x}" ]; then
     CMAKE_EXE=`${TOPLEVEL}/tools/build/tools/ankibuild/cmake.py --find-cmake $CMAKE_VERSION`
 fi
 
+if [[ ! -d EXTERNALS/victor-audio-assets ]]; then
+    echo "The EXTERNALS submodule doesn't exist."
+    echo "Please reclone with --recurse-submodules"
+    exit 1
+fi
+
 if [ $IGNORE_EXTERNAL_DEPENDENCIES -eq 0 ]; then
   echo "Attempting to run fetch-build-deps.sh"
   DONT_ANIM=$DONT_ANIM ${TOPLEVEL}/project/victor/scripts/fetch-build-deps.sh
