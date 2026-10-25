@@ -1177,6 +1177,7 @@ void AkAlsaSink::OnFrameEnd()
 
     if (m_bDataReady && (_framePeak >= kAudibleSpeakerPeak)) {
         const auto now = std::chrono::steady_clock::now().time_since_epoch();
+        std::lock_guard<std::mutex> lock(_lastAudibleSpeakerTimeMutex);
         _lastAudibleSpeakerTime_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
     }
     _framePeak = 0.f;

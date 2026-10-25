@@ -124,7 +124,11 @@ public:
     // command audio to be played and it actually gets played on the speaker
     uint32_t GetSpeakerLatency_ms() const { return _speakerLatency_ms; }
 
-    uint64_t GetLastAudibleSpeakerTime_ms() const { return _lastAudibleSpeakerTime_ms; }
+    uint64_t GetLastAudibleSpeakerTime_ms() const
+    {
+        std::lock_guard<std::mutex> lock(_lastAudibleSpeakerTimeMutex);
+        return _lastAudibleSpeakerTime_ms;
+    }
 
     AkUInt32 m_uAlsaBufferFrames = 0;
 
@@ -134,7 +138,8 @@ private:
 
 	std::atomic<bool> _usingSpeaker{false};
     std::atomic<uint32_t> _speakerLatency_ms{0};
-    std::atomic<uint64_t> _lastAudibleSpeakerTime_ms{0};
+    mutable std::mutex _lastAudibleSpeakerTimeMutex;
+    uint64_t _lastAudibleSpeakerTime_ms = 0;
     float _framePeak = 0.f;
 
 };
