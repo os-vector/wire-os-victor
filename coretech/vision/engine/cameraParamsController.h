@@ -93,7 +93,9 @@ public:
   
   f32 GetMinCameraGain() const { return _minGain; }
   f32 GetMaxCameraGain() const { return _maxGain; }
-  
+
+  s32 GetSubSample() const { return _subSample; }
+
   bool AreCameraParamsValid(const CameraParams& params) const;
   
   const CameraParams& GetNextCameraParams() const { return _currentCameraParams; }

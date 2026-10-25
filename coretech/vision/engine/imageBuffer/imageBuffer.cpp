@@ -96,17 +96,17 @@ s32 ImageBuffer::GetNumRows() const
   return rows;
 }
     
-bool ImageBuffer::GetRGB(ImageRGB& rgb, ImageCacheSize size) const
+bool ImageBuffer::GetRGB(ImageRGB& rgb, ImageCacheSize size, s32 rowStep) const
 {
   DEV_ASSERT(_rawData != nullptr, "ImageBuffer.GetRGB.NullData");
 
   bool res = false;
-  
+
   switch(_format)
   {
     case ImageEncoding::BAYER:
       {
-        res = GetRGBFromBAYER(rgb, size);
+        res = GetRGBFromBAYER(rgb, size, rowStep);
       }
       break;
     case ImageEncoding::RawRGB:
@@ -185,7 +185,7 @@ bool ImageBuffer::GetGray(Image& gray, ImageCacheSize size) const
   return res;
 }
 
-bool ImageBuffer::GetRGBFromBAYER(ImageRGB& rgb, ImageCacheSize size) const
+bool ImageBuffer::GetRGBFromBAYER(ImageRGB& rgb, ImageCacheSize size, s32 rowStep) const
 {
   Debayer::OutputFormat outFormat = Debayer::OutputFormat::RGB24;
   Debayer::Scale outScale = Debayer::Scale::FULL;
@@ -228,6 +228,23 @@ bool ImageBuffer::GetRGBFromBAYER(ImageRGB& rgb, ImageCacheSize size) const
   s32 outHeight = _sensorNumRows / sampleRate;
   s32 outWidth = _sensorNumCols / sampleRate;
   rgb.Allocate(outHeight, outWidth);
+
+  if((rowStep > 1) && (outScale != Debayer::Scale::FULL))
+  {
+    const s32 inBytesPerRow = (_sensorNumCols*5)/4;
+    for(s32 i = 0; i < outHeight; i += rowStep)
+    {
+      Debayer::InArgs rowInArgs(_rawData + (i * sampleRate * inBytesPerRow), sampleRate, _sensorNumCols,
+                                Debayer::Layout::RAW10, Debayer::Pattern::RGGB);
+      Debayer::OutArgs rowOutArgs(reinterpret_cast<u8*>(rgb.GetRow(i)), 1, outWidth, outScale, outFormat);
+      if(RESULT_OK != Debayer::Instance().Invoke(method, rowInArgs, rowOutArgs))
+      {
+        return false;
+      }
+    }
+    return true;
+  }
+
   Debayer::OutArgs outArgs(rgb.get_CvMat_().data, outHeight, outWidth, outScale, outFormat);
 
   Result res = Debayer::Instance().Invoke(method, inArgs, outArgs);

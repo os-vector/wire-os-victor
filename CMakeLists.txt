@@ -175,6 +175,7 @@ include(avs-device-sdk)
 include(speexdsp)
 include(pffft)
 include(mpg123)
+include(sjpeg)
 
 import(util "lib/util")
 import(DAS "lib/das-client")

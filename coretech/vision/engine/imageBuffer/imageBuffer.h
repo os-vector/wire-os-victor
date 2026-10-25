@@ -71,7 +71,7 @@ public:
 
   // Converts raw image data to rgb
   // Returns true if conversion was successful
-  bool GetRGB(ImageRGB& rgb, ImageCacheSize size) const;
+  bool GetRGB(ImageRGB& rgb, ImageCacheSize size, s32 rowStep = 1) const;
 
   // Converts raw image data to gray
   // Returns true if conversion was successful
@@ -83,7 +83,7 @@ private:
   void GetNumRowsCols(s32& rows, s32& cols) const;
 
   // Get RGB image at size from various formats
-  bool GetRGBFromBAYER(ImageRGB& rgb, ImageCacheSize size) const;
+  bool GetRGBFromBAYER(ImageRGB& rgb, ImageCacheSize size, s32 rowStep) const;
   bool GetRGBFromRawRGB(ImageRGB& rgb, ImageCacheSize size) const;
   bool GetRGBFromYUV420sp(ImageRGB& rgb, ImageCacheSize size) const;
   bool GetRGBFromRawGray(ImageRGB& rgb, ImageCacheSize size) const;

@@ -39,8 +39,8 @@ target_link_libraries(cti_vision
 
 if(VICOS)
   target_link_libraries(cti_vision
-    PUBLIC
-    turbojpeg
+    PRIVATE
+    sjpeg
   )
 endif()
 

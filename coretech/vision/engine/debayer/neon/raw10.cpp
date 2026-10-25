@@ -288,7 +288,7 @@ inline __attribute__((always_inline)) void GammaCorrect(const uint8x8x4_t& gamma
                                                         const uint8x8x4_t& gamma2, const uint8x8x4_t& gamma3,
                                                         const uint8x8_t& value_32, uint8x8_t& data)
 {
-  uint8x8_t buffer = vshr_n_u8(data,1);
+  uint8x8_t buffer = vhadd_u8(data, vdup_n_u8(0));
   uint8x8_t output = vtbl4_u8(gamma0, buffer);
   buffer = vsub_u8(buffer, value_32);
   output = vtbx4_u8(output, gamma1, buffer);
@@ -297,6 +297,23 @@ inline __attribute__((always_inline)) void GammaCorrect(const uint8x8x4_t& gamma
   buffer = vsub_u8(buffer, value_32);
   output = vtbx4_u8(output, gamma3, buffer);
   data = output;
+}
+
+const u8 kHalfEvenLow[8]  = { 0,  2,  5,  7, 10, 12, 15, 17};
+const u8 kHalfOddLow[8]   = { 1,  3,  6,  8, 11, 13, 16, 18};
+const u8 kHalfEvenHigh[8] = { 4,  6,  9, 11, 14, 16, 19, 21};
+const u8 kHalfOddHigh[8]  = { 5,  7, 10, 12, 15, 17, 20, 22};
+
+inline __attribute__((always_inline)) void LoadHalfBlock(const u8* ptr, uint8x8x3_t& low, uint8x8x3_t& high)
+{
+  const uint8x16_t data0 = vld1q_u8(ptr);
+  const uint8x16_t data1 = vld1q_u8(ptr + 16);
+  low.val[0] = vget_low_u8(data0);
+  low.val[1] = vget_high_u8(data0);
+  low.val[2] = vget_low_u8(data1);
+  high.val[0] = low.val[2];
+  high.val[1] = vget_high_u8(data1);
+  high.val[2] = vld1_u8(ptr + 32);
 }
 
 } /* anonymous namespace */
@@ -351,15 +368,10 @@ inline __attribute__((always_inline)) void BlackLevelAndNormalize(uint8x8_t& dat
     return;
   }
 
-  const uint8x8_t black = vdup_n_u8(BLACK_LEVEL_8);
-  const uint8x8_t range = vdup_n_u8(WHITE_LEVEL_8 - BLACK_LEVEL_8);
+  const uint8x8_t black = vdup_n_u8(BLACK_LEVEL_8 + 1);
+  const uint8x8_t range = vdup_n_u8(WHITE_LEVEL_8 - BLACK_LEVEL_8 - 1);
   data = vqsub_u8(data, black);
   data = vmin_u8(data, range);
-  uint16x8_t data16 = vmovl_u8(data);
-  const uint16x8_t scale = vdupq_n_u16(255);
-  data16 = vmulq_u16(data16, scale);
-
-  data = vshrn_n_u16(data16, 8);
 }
 
 inline void TemporalDenoiseGreen(uint8x8_t& cur, uint8x8_t& prev, bool& valid)
@@ -538,6 +550,60 @@ Result HandleRAW10::RAW10_to_RGB24_HALF_or_QUARTER(const Debayer::InArgs& inArgs
   const uint8x8x4_t gamma2 = LoadGammaTable(_gammaLUT.data() + 64);
   const uint8x8x4_t gamma3 = LoadGammaTable(_gammaLUT.data() + 96);
   store.value_32 = vdup_n_u8(32);
+
+  if (!DO_GREEN_AVG && (outArgs.scale == Debayer::Scale::HALF) && ((outArgs.width % 16) == 0))
+  {
+    const uint8x8_t evenLow = vld1_u8(kHalfEvenLow);
+    const uint8x8_t oddLow = vld1_u8(kHalfOddLow);
+    const uint8x8_t evenHigh = vld1_u8(kHalfEvenHigh);
+    const uint8x8_t oddHigh = vld1_u8(kHalfOddHigh);
+    const u32 inBytesPerRow = (inArgs.width*5)/4;
+
+    uint8x8x3_t low, high;
+    uint8x8x3_t rgbLow, rgbHigh;
+
+    u8* outPtr = outArgs.data;
+    for (u32 row = 0; row < outArgs.height; ++row)
+    {
+      const u8* inPtr1 = inArgs.data + (2 * row * inBytesPerRow);
+      const u8* inPtr2 = inPtr1 + inBytesPerRow;
+      for (u32 col = 0; col < outArgs.width; col += 16)
+      {
+        LoadHalfBlock(inPtr1, low, high);
+        rgbLow.val[0]  = vtbl3_u8(low,  evenLow);
+        rgbHigh.val[0] = vtbl3_u8(high, evenHigh);
+        rgbLow.val[1]  = vtbl3_u8(low,  oddLow);
+        rgbHigh.val[1] = vtbl3_u8(high, oddHigh);
+
+        LoadHalfBlock(inPtr2, low, high);
+        rgbLow.val[2]  = vtbl3_u8(low,  oddLow);
+        rgbHigh.val[2] = vtbl3_u8(high, oddHigh);
+
+        inPtr1 += 40;
+        inPtr2 += 40;
+
+        BlackLevelAndNormalize(rgbLow.val[0], isXray);
+        BlackLevelAndNormalize(rgbLow.val[1], isXray);
+        BlackLevelAndNormalize(rgbLow.val[2], isXray);
+        BlackLevelAndNormalize(rgbHigh.val[0], isXray);
+        BlackLevelAndNormalize(rgbHigh.val[1], isXray);
+        BlackLevelAndNormalize(rgbHigh.val[2], isXray);
+
+        GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, rgbLow.val[0]);
+        GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, rgbLow.val[1]);
+        GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, rgbLow.val[2]);
+        GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, rgbHigh.val[0]);
+        GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, rgbHigh.val[1]);
+        GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, rgbHigh.val[2]);
+
+        vst3_u8(outPtr, rgbLow);
+        vst3_u8(outPtr + 24, rgbHigh);
+        outPtr += 48;
+      }
+    }
+
+    return RESULT_OK;
+  }
 
   u8* inBufferPtr1 = inArgs.data;
   u8* inBufferPtr2 = inBufferPtr1 + setup.inRowSkip;
@@ -872,6 +938,38 @@ Result HandleRAW10::RAW10_to_Y8_HALF_or_QUARTER(const Debayer::InArgs& inArgs, D
   const uint8x8x4_t gamma2 = LoadGammaTable(_gammaLUT.data() + 64);
   const uint8x8x4_t gamma3 = LoadGammaTable(_gammaLUT.data() + 96);
   store.value_32 = vdup_n_u8(32);
+
+  if (!DO_GREEN_AVG && (outArgs.scale == Debayer::Scale::HALF) && ((outArgs.width % 16) == 0))
+  {
+    const uint8x8_t oddLow = vld1_u8(kHalfOddLow);
+    const uint8x8_t oddHigh = vld1_u8(kHalfOddHigh);
+    const u32 inBytesPerRow = (inArgs.width*5)/4;
+
+    uint8x8x3_t low, high;
+
+    u8* outPtr = outArgs.data;
+    for (u32 row = 0; row < outArgs.height; ++row)
+    {
+      const u8* inPtr = inArgs.data + (2 * row * inBytesPerRow);
+      for (u32 col = 0; col < outArgs.width; col += 16)
+      {
+        LoadHalfBlock(inPtr, low, high);
+        inPtr += 40;
+
+        uint8x8_t greenLow = vtbl3_u8(low, oddLow);
+        uint8x8_t greenHigh = vtbl3_u8(high, oddHigh);
+        BlackLevelAndNormalize(greenLow, isXray);
+        BlackLevelAndNormalize(greenHigh, isXray);
+        GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, greenLow);
+        GammaCorrect(gamma0, gamma1, gamma2, gamma3, store.value_32, greenHigh);
+
+        vst1q_u8(outPtr, vcombine_u8(greenLow, greenHigh));
+        outPtr += 16;
+      }
+    }
+
+    return RESULT_OK;
+  }
 
   u8* inBufferPtr1 = inArgs.data;
   u8* inBufferPtr2 = inBufferPtr1 + setup.inRowSkip;

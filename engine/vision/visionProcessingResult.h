@@ -51,7 +51,6 @@ struct VisionProcessingResult
   std::list<Vision::SalientPoint>                       salientPoints;
   ExternalInterface::RobotObservedIllumination          illumination;
   
-  Vision::CompressedImage compressedDisplayImg;
   Vision::ImageRGB565 mirrorModeImg;
   
   // Used to pass debug images back to main thread for display:

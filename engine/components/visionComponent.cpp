@@ -977,6 +977,12 @@ namespace Vector {
                                                                    imageMean)));
         }
       }
+
+      Vision::CompressedImage vizImage;
+      if(_visionSystem->CheckVizMailbox(vizImage))
+      {
+        SendCompressedImage(vizImage, "camera");
+      }
     }
 
     if(anyFailures) {
@@ -2756,11 +2762,6 @@ namespace Vector {
 
       LOG_ERROR("VisionComponent.UpdateAllResults.DebugImagesPresent",
                 "%s", str.c_str());
-    }
-
-    if(result.modesProcessed.Contains(VisionMode::Viz))
-    {
-      SendCompressedImage(result.compressedDisplayImg, "camera");
     }
   }
 
