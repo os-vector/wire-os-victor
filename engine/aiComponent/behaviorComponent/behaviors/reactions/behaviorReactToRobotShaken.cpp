@@ -266,7 +266,7 @@ bool ShouldUseSnowglobe() {
 
   if (!initialized) {
     struct tm localDate;
-    WallTime::getInstance()->GetLocalTime(localDate);
+    WallTime::getInstance()->GetApproximateLocalTime(localDate);
     const int currentMonth = localDate.tm_mon;
 
     if (currentMonth >= 10 || currentMonth <= 1) {
