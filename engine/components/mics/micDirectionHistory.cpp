@@ -38,6 +38,8 @@ namespace {
 CONSOLE_VAR_RANGED( uint32_t,       kRTS_PowerAvgNumSamples,   "SoundReaction", 100, 1, 250 );
 CONSOLE_VAR_RANGED( double,         kRTS_WebVizUpdateInterval, "SoundReaction", 0.20, 0.0, 1.0 );
 
+CONSOLE_VAR( bool,                  kRTS_IgnoreWhileSpeakerAudible, "SoundReaction", true );
+
 // NOTE: these are only for display purposes now (actual values live in instance jsons)
 CONSOLE_VAR( double,                kRTS_AbsolutePowerThreshold_display,           "SoundReaction", 2.90 );
 CONSOLE_VAR( double,                kRTS_MinPowerThreshold_display,                "SoundReaction", 1.50 );
@@ -70,6 +72,7 @@ void MicDirectionHistory::AddMicSample(const RobotInterface::MicDirection& messa
 
   AddDirectionSample(currentTime_ms, (message.activeState == 1),
                      message.direction, message.confidence, message.selectedDirection);
+  _soundTrackingData.isSpeakerAudible = message.isSpeakerAudible;
   AddMicPowerSample(currentTime_ms, message.latestPowerValue, message.latestNoiseFloor);
   AddVadLogSample(currentTime_ms, message.latestNoiseFloor, message.activeState);
 
@@ -503,7 +506,8 @@ void MicDirectionHistory::ProcessSoundReactors()
     const double powerDelta = ( _soundTrackingData.latestPowerLevel - _soundTrackingData.latestNoiseFloor );
     const double powerScore = ( powerDelta - _soundTrackingData.averagePeakLevel );
 
-    if ( Util::IsFltGTZero( powerScore ) ) {
+    const bool ignoreForSpeaker = ( kRTS_IgnoreWhileSpeakerAudible && _soundTrackingData.isSpeakerAudible );
+    if ( Util::IsFltGTZero( powerScore ) && !ignoreForSpeaker ) {
       for (auto reactor : _soundReactors) {
         isTriggered |= reactor.callback( powerScore, _soundTrackingData.latestMicConfidence, _soundTrackingData.latestMicDirection );
       }

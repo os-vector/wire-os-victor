@@ -20,12 +20,10 @@
 #include "AkPluginsExtApi.h"
 #include "util/container/fixedCircularBuffer.h"
 
-#include <functional>
-#include <mutex>
-#ifdef STANDALONE_SIM
 #include <atomic>
 #include <cstdint>
-#endif
+#include <functional>
+#include <mutex>
 
 /////////////////////////////////////////////////////
 // Static buffer size
@@ -125,12 +123,18 @@ public:
     // Get the maximum speaker 'latency', which is the max delay between when we
     // command audio to be played and it actually gets played on the speaker
     uint32_t GetSpeakerLatency_ms() const { return _speakerLatency_ms; }
-  
+
+    uint64_t GetLastAudibleSpeakerTime_ms() const { return _lastAudibleSpeakerTime_ms; }
+
+    AkUInt32 m_uAlsaBufferFrames = 0;
+
 private:
     static AkOutputGetLatencyCallbackFunc m_pfnGetLatencyCallback;
     static AkUInt32						  m_uLatencyReportThresholdMsec; //Latency threshold value in ms, default 5 ms.
 
 	std::atomic<bool> _usingSpeaker{false};
     std::atomic<uint32_t> _speakerLatency_ms{0};
+    std::atomic<uint64_t> _lastAudibleSpeakerTime_ms{0};
+    float _framePeak = 0.f;
 
 };

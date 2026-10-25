@@ -955,6 +955,31 @@ bool MicDataSystem::IsSpeakerPlayingAudio() const
   return false;
 }
 
+uint64_t MicDataSystem::GetLastAudibleSpeakerTime_ms() const
+{
+  if (_context != nullptr) {
+    const auto* audioController = _context->GetAudioController();
+    if (audioController != nullptr) {
+      const auto* pluginInterface = audioController->GetPluginInterface();
+      if (pluginInterface != nullptr) {
+        return pluginInterface->AkAlsaSinkGetLastAudibleSpeakerTime_ms();
+      }
+    }
+  }
+  return 0;
+}
+
+uint64_t MicDataSystem::GetLastNoisyAudioEventTime_ms() const
+{
+  if (_context != nullptr) {
+    const auto* audioController = _context->GetAudioController();
+    if (audioController != nullptr) {
+      return audioController->GetLastNoisyEventTime_ms();
+    }
+  }
+  return 0;
+}
+
 bool MicDataSystem::HasConnectionToCloud() const
 {
   return _udpServer->HasClient();

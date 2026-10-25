@@ -22,6 +22,8 @@
 #include "audioEngine/audioScene.h"
 #include "util/helpers/noncopyable.h"
 #include "util/math/numericCast.h"
+#include <cstdint>
+#include <functional>
 #include <map>
 #include <memory>
 #include <set>
@@ -133,6 +135,12 @@ public:
   // Stops playing all sounds on the specified game object.
   // + If AudioGameObject::Invalid is specified, then ALL audio will be stopped
   void StopAllAudioEvents( AudioGameObject gameObject = kInvalidAudioGameObject );
+  
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  using QuietEventFunc = std::function<bool(AudioEventId eventId)>;
+  static void SetQuietEventFunc( QuietEventFunc&& func );
+  
+  static uint64_t GetLastNoisyEventTime_ms();
   
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // Set RTPC Value

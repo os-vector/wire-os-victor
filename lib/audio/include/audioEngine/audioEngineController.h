@@ -21,6 +21,8 @@
 #include "audioEngine/audioEngineConfigDefines.h"
 #include "audioEngine/audioCallback.h"
 #include "util/helpers/noncopyable.h"
+#include <cstdint>
+#include <functional>
 #include <string>
 #include <unordered_map>
 #include <memory>
@@ -106,6 +108,10 @@ public:
   // Stops playing all sounds on the specified game object
   // + If AudioGameObject::Invalid is specified, then ALL audio will be stopped
   virtual void StopAllAudioEvents( AudioGameObject gameObjectId = kInvalidAudioGameObject );
+
+  void SetQuietEventFunc( std::function<bool(AudioEventId eventId)>&& func );
+
+  uint64_t GetLastNoisyEventTime_ms() const;
 
   virtual bool SetState( AudioStateGroupId stateGroupId,
                          AudioStateId stateId ) const;

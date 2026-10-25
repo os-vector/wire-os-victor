@@ -83,6 +83,7 @@ private:
     MicDirectionIndex         latestMicDirection = kMicDirectionUnknown;
     MicDirectionIndex         selectedMicDirection = kMicDirectionUnknown;
     bool                      isVadActive = false;
+    bool                      isSpeakerAudible = false;
     MicDirectionConfidence    latestMicConfidence = 0;
     double                    latestPowerLevel = 0.0;
     double                    latestNoiseFloor = 0.0;

@@ -52,6 +52,8 @@ public:
   // Get the maximum speaker 'latency', which is the max delay between when we
   // command audio to be played and it actually gets played on the speaker
   uint32_t GetSpeakerLatency_ms() const;
+
+  uint64_t GetLastAudibleSpeakerTime_ms() const;
   
   uint32_t GetSampleRate() const;
   uint8_t  GetNumberOfChannels() const;
