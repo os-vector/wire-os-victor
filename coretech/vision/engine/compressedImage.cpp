@@ -21,7 +21,7 @@
 
 #ifdef VICOS
 #include "anki/cozmo/shared/factory/emrHelper.h"
-#include <turbojpeg.h>
+#include "sjpeg.h"
 #endif
 
 namespace Anki {
@@ -30,99 +30,66 @@ namespace Vision {
 #ifdef VICOS
 namespace {
 
-struct TurboJpegCompressor
-{
-  tjhandle       handle      = nullptr;
-  unsigned char* jpegBuf     = nullptr;
-  size_t         jpegBufSize = 0;
+constexpr int kSjpegNumThreads = 2;
 
-  ~TurboJpegCompressor()
+thread_local cv::Mat s_rgbScratch;
+
+sjpeg::EncoderParam MakeSjpegParam(const s32 quality, const SjpegYUVMode yuvMode)
+{
+  sjpeg::EncoderParam param(static_cast<float>(quality));
+  param.yuv_mode = yuvMode;
+  param.Huffman_compress = false;
+  param.adaptive_quantization = false;
+  param.num_threads = kSjpegNumThreads;
+  return param;
+}
+
+bool SjpegCompress(const ImageBase<PixelRGB>& img, const s32 quality, std::vector<u8>& compressedBuffer)
+{
+  const cv::Mat* mat = &img.get_CvMat_();
+  if(mat->empty())
   {
-    if(nullptr != jpegBuf)
-    {
-      tj3Free(jpegBuf);
-    }
-    if(nullptr != handle)
-    {
-      tj3Destroy(handle);
-    }
+    return false;
   }
-};
 
-thread_local TurboJpegCompressor s_turboJpeg;
+  if(Vector::IsXray())
+  {
+    cv::cvtColor(*mat, s_rgbScratch, cv::COLOR_BGR2RGB);
+    mat = &s_rgbScratch;
+  }
 
-bool CompressWithTurboJpeg(const cv::Mat& mat, const int pixelFormat, const int subsamp, const s32 quality,
-                           std::vector<u8>& compressedBuffer)
+  const std::shared_ptr<sjpeg::ByteSink> sink = sjpeg::MakeByteSink(&compressedBuffer);
+  if(!sink || !sjpeg::Encode(mat->data, mat->cols, mat->rows, static_cast<int>(mat->step[0]),
+                             MakeSjpegParam(quality, SJPEG_YUV_420), sink.get()))
+  {
+    PRINT_NAMED_WARNING("CompressedImage.SjpegCompress.RGBFailed", "%dx%d", mat->cols, mat->rows);
+    compressedBuffer.clear();
+    return false;
+  }
+  return true;
+}
+
+bool SjpegCompress(const ImageBase<u8>& img, const s32 quality, std::vector<u8>& compressedBuffer)
 {
+  const cv::Mat& mat = img.get_CvMat_();
   if(mat.empty())
   {
     return false;
   }
 
-  TurboJpegCompressor& tj = s_turboJpeg;
-  if(nullptr == tj.handle)
+  const std::shared_ptr<sjpeg::ByteSink> sink = sjpeg::MakeByteSink(&compressedBuffer);
+  if(!sink || !sjpeg::EncodeGray(mat.data, mat.cols, mat.rows, static_cast<int>(mat.step[0]),
+                                 MakeSjpegParam(quality, SJPEG_YUV_400), sink.get()))
   {
-    tj.handle = tj3Init(TJINIT_COMPRESS);
-    if(nullptr == tj.handle)
-    {
-      PRINT_NAMED_WARNING("CompressedImage.CompressWithTurboJpeg.InitFailed", "");
-      return false;
-    }
-    tj3Set(tj.handle, TJPARAM_FASTDCT, 1);
-    tj3Set(tj.handle, TJPARAM_NOREALLOC, 1);
-  }
-
-  if((0 != tj3Set(tj.handle, TJPARAM_QUALITY, quality)) ||
-     (0 != tj3Set(tj.handle, TJPARAM_SUBSAMP, subsamp)))
-  {
-    PRINT_NAMED_WARNING("CompressedImage.CompressWithTurboJpeg.SetParamFailed", "%s", tj3GetErrorStr(tj.handle));
+    PRINT_NAMED_WARNING("CompressedImage.SjpegCompress.GrayFailed", "%dx%d", mat.cols, mat.rows);
+    compressedBuffer.clear();
     return false;
   }
-
-  const size_t maxJpegSize = tj3JPEGBufSize(mat.cols, mat.rows, subsamp);
-  if(0 == maxJpegSize)
-  {
-    PRINT_NAMED_WARNING("CompressedImage.CompressWithTurboJpeg.BufSizeFailed", "%s", tj3GetErrorStr(tj.handle));
-    return false;
-  }
-
-  if(tj.jpegBufSize < maxJpegSize)
-  {
-    tj3Free(tj.jpegBuf);
-    tj.jpegBuf = static_cast<unsigned char*>(tj3Alloc(maxJpegSize));
-    tj.jpegBufSize = (nullptr != tj.jpegBuf ? maxJpegSize : 0);
-    if(nullptr == tj.jpegBuf)
-    {
-      PRINT_NAMED_WARNING("CompressedImage.CompressWithTurboJpeg.AllocFailed", "%zu bytes", maxJpegSize);
-      return false;
-    }
-  }
-
-  size_t jpegSize = tj.jpegBufSize;
-  if(0 != tj3Compress8(tj.handle, mat.data, mat.cols, static_cast<int>(mat.step[0]), mat.rows, pixelFormat,
-                       &tj.jpegBuf, &jpegSize))
-  {
-    PRINT_NAMED_WARNING("CompressedImage.CompressWithTurboJpeg.CompressFailed", "%s", tj3GetErrorStr(tj.handle));
-    return false;
-  }
-
-  compressedBuffer.assign(tj.jpegBuf, tj.jpegBuf + jpegSize);
   return true;
 }
 
-bool TurboJpegCompress(const ImageBase<PixelRGB>& img, const s32 quality, std::vector<u8>& compressedBuffer)
-{
-  const int pixelFormat = (Vector::IsXray() ? TJPF_BGR : TJPF_RGB);
-  return CompressWithTurboJpeg(img.get_CvMat_(), pixelFormat, TJSAMP_420, quality, compressedBuffer);
-}
-
-bool TurboJpegCompress(const ImageBase<u8>& img, const s32 quality, std::vector<u8>& compressedBuffer)
-{
-  return CompressWithTurboJpeg(img.get_CvMat_(), TJPF_GRAY, TJSAMP_GRAY, quality, compressedBuffer);
-}
-
 template<class PixelType>
-bool TurboJpegCompress(const ImageBase<PixelType>&, const s32, std::vector<u8>&)
+bool SjpegCompress(const ImageBase<PixelType>&, const s32, std::vector<u8>&)
 {
   return false;
 }
@@ -161,7 +128,7 @@ const std::vector<u8>& CompressedImage::Compress(const ImageBase<PixelType>& img
   SetMetadata(img);
 
 #ifdef VICOS
-  if(TurboJpegCompress(img, quality, _compressedBuffer))
+  if(SjpegCompress(img, quality, _compressedBuffer))
   {
     return _compressedBuffer;
   }

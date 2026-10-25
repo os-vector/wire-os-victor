@@ -57,6 +57,7 @@
 #include "util/helpers/fullEnumToValueArrayChecker.h"
 #include "util/logging/logging.h"
 #include "util/random/randomGenerator.h" // DEBUG
+#include "util/threading/threadPriority.h"
 
 #include <future>
 #include <thread>
@@ -403,7 +404,15 @@ Result VisionSystem::UpdateCameraCalibration(std::shared_ptr<Vision::CameraCalib
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 VisionSystem::~VisionSystem()
 {
-  
+  {
+    std::lock_guard<std::mutex> lock(_vizCompressMutex);
+    _stopVizCompressThread = true;
+  }
+  _vizCompressCondition.notify_all();
+  if(_vizCompressThread.joinable())
+  {
+    _vizCompressThread.join();
+  }
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -495,6 +504,60 @@ bool VisionSystem::CheckMailbox(VisionProcessingResult& result)
     std::swap(result, _results.front());
     _results.pop();
     return true;
+  }
+}
+
+bool VisionSystem::CheckVizMailbox(Vision::CompressedImage& compressedImg)
+{
+  std::lock_guard<std::mutex> lock(_vizCompressMutex);
+  if(!_hasCompressedDisplayImg)
+  {
+    return false;
+  }
+  std::swap(compressedImg, _compressedDisplayImg);
+  _hasCompressedDisplayImg = false;
+  return true;
+}
+
+void VisionSystem::QueueVizImageForCompression(const Vision::ImageRGB& img)
+{
+  {
+    std::lock_guard<std::mutex> lock(_vizCompressMutex);
+    img.CopyTo(_vizPendingImage);
+    _vizPendingQuality = _imageCompressQuality;
+    _hasVizPendingImage = true;
+    if(!_vizCompressThread.joinable())
+    {
+      _vizCompressThread = std::thread(&VisionSystem::VizCompressLoop, this);
+    }
+  }
+  _vizCompressCondition.notify_one();
+}
+
+void VisionSystem::VizCompressLoop()
+{
+  Util::SetThreadName(pthread_self(), "VizCompress");
+
+  Vision::CompressedImage compressedImg;
+  std::unique_lock<std::mutex> lock(_vizCompressMutex);
+  while(true)
+  {
+    _vizCompressCondition.wait(lock, [this]{ return _hasVizPendingImage || _stopVizCompressThread; });
+    if(_stopVizCompressThread)
+    {
+      return;
+    }
+
+    std::swap(_vizPendingImage, _vizCompressingImage);
+    const s32 quality = _vizPendingQuality;
+    _hasVizPendingImage = false;
+    lock.unlock();
+
+    compressedImg.Compress(_vizCompressingImage, quality);
+
+    lock.lock();
+    std::swap(_compressedDisplayImg, compressedImg);
+    _hasCompressedDisplayImg = true;
   }
 }
 
@@ -625,7 +688,15 @@ Result VisionSystem::UpdateCameraParams(Vision::ImageCache& imageCache)
   if(imageCache.HasColor())
   {
     Tic("UpdateCameraParams.GetRGB");
-    const Vision::ImageRGB& inputImage = imageCache.GetRGB();
+    const Vision::ImageCacheSize size = Vision::ImageCache::GetDefaultImageCacheSize();
+    const bool useCachedImage = (!imageCache.GetBuffer().HasValidData() ||
+                                 (imageCache.GetBuffer().GetFormat() != Vision::ImageEncoding::BAYER) ||
+                                 (IsModeEnabled(VisionMode::Viz) && (_vizImageBroadcastSize == size)));
+    if(!useCachedImage)
+    {
+      imageCache.GetBuffer().GetRGB(_cameraParamsImage, size, _cameraParamsController->GetSubSample());
+    }
+    const Vision::ImageRGB& inputImage = (useCachedImage ? imageCache.GetRGB(size) : _cameraParamsImage);
     Toc("UpdateCameraParams.GetRGB");
     Tic("UpdateCameraParams.Compute");
     expResult = _cameraParamsController->ComputeNextCameraParams(inputImage, aeMode, wbMode, useCycling, nextParams);
@@ -1865,9 +1936,9 @@ Result VisionSystem::Update(const VisionPoseData& poseData, Vision::ImageCache& 
     const Vision::ImageRGB& vizImage = imageCache.GetRGB(_vizImageBroadcastSize);
     Toc("Viz.GetRGB");
 
-    Tic("Viz.Compress");
-    _currentResult.compressedDisplayImg.Compress(vizImage, _imageCompressQuality);
-    Toc("Viz.Compress");
+    Tic("Viz.QueueCompress");
+    QueueVizImageForCompression(vizImage);
+    Toc("Viz.QueueCompress");
 
     Toc("Viz");
 
