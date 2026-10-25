@@ -192,6 +192,8 @@ private:
                                         uint32_t robotStatus,
                                         float robotAngle);
 
+  bool IsSpeakerAudible() const;
+
   void ProcessRawLoop();
   void ProcessTriggerLoop();
   

@@ -233,6 +233,24 @@ AudioPlayingId AudioEngineController::PostAudioEvent( AudioEventId eventId,
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void AudioEngineController::SetQuietEventFunc( std::function<bool(AudioEventId eventId)>&& func )
+{
+#if USE_AUDIO_ENGINE
+  WwiseComponent::SetQuietEventFunc( std::move( func ) );
+#endif
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+uint64_t AudioEngineController::GetLastNoisyEventTime_ms() const
+{
+  uint64_t time_ms = 0;
+#if USE_AUDIO_ENGINE
+  time_ms = WwiseComponent::GetLastNoisyEventTime_ms();
+#endif
+  return time_ms;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void AudioEngineController::StopAllAudioEvents( AudioGameObject gameObjectId )
 {
 #if USE_AUDIO_ENGINE

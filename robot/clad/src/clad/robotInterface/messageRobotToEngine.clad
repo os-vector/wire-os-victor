@@ -75,6 +75,7 @@ message MicDirection
   int_32    activeState,
   float_32  latestPowerValue,
   float_32  latestNoiseFloor,
+  bool      isSpeakerAudible,
 }
 
 message MicDataState

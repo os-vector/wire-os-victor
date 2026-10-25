@@ -37,6 +37,7 @@
 #include "util/math/math.h"
 #include "util/threading/threadPriority.h"
 #include "clad/robotInterface/messageRobotToEngine_sendAnimToEngine_helper.h"
+#include <chrono>
 #include <list>
 #include <sched.h>
 
@@ -52,6 +53,8 @@ namespace {
 
   CONSOLE_VAR(bool, kMicData_CollectRawTriggers, CONSOLE_GROUP, false);
   CONSOLE_VAR(bool, kMicData_SpeakerNoiseDisablesMics, CONSOLE_GROUP, false);
+
+  CONSOLE_VAR_RANGED(uint32_t, kMicData_SpeakerAudibleTail_ms, CONSOLE_GROUP, 150, 0, 2000);
 
   // Time necessary for the VAD logic to wait when there's no activity, before we begin skipping processing for
   // performance. Note that this probably needs to at least be as long as the trigger, which is ~ 500-750ms.
@@ -452,6 +455,7 @@ void MicDataProcessor::ProcessRawAudio(RobotTimeStamp_t timestamp,
   newMessage.activeState = directionResult.activeState;
   newMessage.latestPowerValue = directionResult.latestPowerValue;
   newMessage.latestNoiseFloor = directionResult.latestNoiseFloor;
+  newMessage.isSpeakerAudible = IsSpeakerAudible();
   std::copy(
     directionResult.confidenceList.begin(),
     directionResult.confidenceList.end(),
@@ -459,6 +463,20 @@ void MicDataProcessor::ProcessRawAudio(RobotTimeStamp_t timestamp,
   
   auto engineMessage = std::make_unique<RobotInterface::RobotToEngine>(std::move(newMessage));
   _micDataSystem->SendMessageToEngine(std::move(engineMessage));
+}
+
+bool MicDataProcessor::IsSpeakerAudible() const
+{
+  const uint64_t lastAudible_ms = _micDataSystem->GetLastAudibleSpeakerTime_ms();
+  const uint64_t lastNoisyEvent_ms = _micDataSystem->GetLastNoisyAudioEventTime_ms();
+  if ((lastAudible_ms == 0) || (lastNoisyEvent_ms == 0)) {
+    return false;
+  }
+
+  const auto now = std::chrono::steady_clock::now().time_since_epoch();
+  const uint64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+  const uint64_t window_ms = _micDataSystem->GetSpeakerLatency_ms() + kMicData_SpeakerAudibleTail_ms;
+  return (now_ms < lastAudible_ms + window_ms) && (now_ms < lastNoisyEvent_ms + window_ms);
 }
 
 MicDirectionData MicDataProcessor::ProcessMicrophonesSE(const AudioUtil::AudioSample* audioChunk,

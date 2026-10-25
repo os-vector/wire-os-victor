@@ -125,6 +125,10 @@ public:
   void UpdateTimeZone(const std::string& newTimeZone);
   
   bool IsSpeakerPlayingAudio() const;
+
+  uint64_t GetLastAudibleSpeakerTime_ms() const;
+
+  uint64_t GetLastNoisyAudioEventTime_ms() const;
   
   // Get the maximum speaker 'latency', which is the max delay between when we
   // command audio to be played and it actually gets played on the speaker

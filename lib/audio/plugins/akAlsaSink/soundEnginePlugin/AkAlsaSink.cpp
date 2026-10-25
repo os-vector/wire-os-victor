@@ -5,6 +5,8 @@
 #include <AK/AkWwiseSDKVersion.h>
 #include <AK/Tools/Common/AkPlatformFuncs.h>
 #include <algorithm>
+#include <chrono>
+#include <cmath>
 #include <sched.h>
 #ifdef STANDALONE_SIM
 #include <unistd.h>
@@ -30,6 +32,8 @@
 using namespace AK::CustomHardware;
 
 static AkUInt32 g_uBuffersNeeded = 0; //Global for Main output to set only
+
+static constexpr float kAudibleSpeakerPeak = 0.001f;
 
 AK::IAkPlugin* CreateAkAlsaSink(AK::IAkPluginMemAlloc * in_pAllocator)
 {
@@ -588,6 +592,7 @@ static AKRESULT alsa_stream_connect(void *in_puserdata)
 
 	AK_LOG_INFO("ALSA buffer size (frames) is set to : %i", buffer_size);
 	AK_LOG_INFO("ALSA period is set to : %i", period);
+	pAlsaSinkDevice->m_uAlsaBufferFrames = buffer_size;
 
 	// Apply HW parameter and prepare device
 	retValue = snd_pcm_hw_params(pPcmHandle, pAlsaSinkDevice->m_phwparams);
@@ -939,9 +944,9 @@ AKRESULT AkAlsaSink::Init(
 		m_pChannelMap[i] = AK::StdChannelIndexToDisplayIndex(AK::ChannelOrdering_Standard, m_uChannelMask, i);
 	}
 
-	// Compute the max speaker 'latency'. Divide sample rate (which is in Hz) by 1000
+	// Compute the max speaker 'latency' (local ring + ALSA hw buffer). Divide sample rate (which is in Hz) by 1000
 	// since we want a value in milliseconds (and want to avoid integer rounding errors)
-	_speakerLatency_ms = m_uNumBuffers * m_uFrameSize / (m_uSampleRate / 1000);
+	_speakerLatency_ms = (m_uNumBuffers * m_uFrameSize + m_uAlsaBufferFrames) / (m_uSampleRate / 1000);
 	AK_LOG_INFO("Speaker latency computed to be %u milliseconds", (uint32_t) _speakerLatency_ms);
   
 	AK_LOG_INFO("Successful Alsa sink initialization");
@@ -1138,10 +1143,11 @@ void AkAlsaSink::Consume(
 		{
 			float * AK_RESTRICT pfSource = in_pInputBuffer->GetChannel(m_pChannelMap[i]);		
 			int16_t * AK_RESTRICT pfDest = latestAudioDest + i; // Channel offset
-			AkReal32 fGain = fGainStart;	
+			AkReal32 fGain = fGainStart;
 			for (unsigned int j = 0; j < uNumFrames; j++)
 			{
 				const float f = pfSource[j] * fGain;
+				_framePeak = std::max(_framePeak, std::fabs(f));
 
 				//Can be simd instruction to improve performance
 				//To be optimized
@@ -1168,6 +1174,13 @@ void AkAlsaSink::OnFrameEnd()
 	
     // We are using the speaker if we have data ready at this point.
     _usingSpeaker = m_bDataReady;
+
+    if (m_bDataReady && (_framePeak >= kAudibleSpeakerPeak)) {
+        const auto now = std::chrono::steady_clock::now().time_since_epoch();
+        std::lock_guard<std::mutex> lock(_lastAudibleSpeakerTimeMutex);
+        _lastAudibleSpeakerTime_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+    }
+    _framePeak = 0.f;
 
 	{
 		// Lock while using _sinkPluginBuffer's data

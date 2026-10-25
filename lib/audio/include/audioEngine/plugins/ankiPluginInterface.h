@@ -100,6 +100,8 @@ public:
   // command audio to be played and it actually gets played on the speaker
   uint32_t AkAlsaSinkGetSpeakerLatency_ms() const;
 
+  uint64_t AkAlsaSinkGetLastAudibleSpeakerTime_ms() const;
+
 private:
   
 //  AudioEngineController& _parentAudioController;

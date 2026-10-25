@@ -230,6 +230,18 @@ uint32_t AnkiPluginInterface::AkAlsaSinkGetSpeakerLatency_ms() const
   return latency;
 }
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+uint64_t AnkiPluginInterface::AkAlsaSinkGetLastAudibleSpeakerTime_ms() const
+{
+  uint64_t time_ms = 0;
+#if USE_AUDIO_ENGINE
+  if (_akAlsaSinkPlugIn != nullptr) {
+    time_ms = _akAlsaSinkPlugIn->GetLastAudibleSpeakerTime_ms();
+  }
+#endif
+  return time_ms;
+}
+
   
 } // PlugIns
 } // AudioEngine

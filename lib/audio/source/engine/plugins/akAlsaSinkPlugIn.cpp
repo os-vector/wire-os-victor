@@ -76,6 +76,18 @@ uint32_t AkAlsaSinkPlugIn::GetSpeakerLatency_ms() const
 #endif
   return latency;
 }
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+uint64_t AkAlsaSinkPlugIn::GetLastAudibleSpeakerTime_ms() const
+{
+  uint64_t time_ms = 0;
+#if defined VICOS && not defined EXCLUDE_ANKI_AUDIO_LIBS
+  if (_pluginInstance != nullptr) {
+    time_ms = _pluginInstance->GetLastAudibleSpeakerTime_ms();
+  }
+#endif
+  return time_ms;
+}
   
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

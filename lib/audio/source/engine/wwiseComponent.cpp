@@ -43,6 +43,8 @@
 #include <assert.h>
 #include <vector>
 #include <algorithm>
+#include <chrono>
+#include <unordered_map>
 
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -68,6 +70,46 @@ namespace AudioEngine {
   
 static std::mutex sCallbackQueueMutex;
 static std::vector<std::pair<AudioCallbackContext*, std::unique_ptr<const AudioCallbackInfo>>> sCallbackQueue;
+
+static std::mutex sNoisyEventMutex;
+static WwiseComponent::QuietEventFunc sQuietEventFunc;
+static std::unordered_map<AudioEventId, bool> sIsNoisyEventCache;
+static int sNumNoisyEventsPlaying = 0;
+static uint64_t sLastNoisyEventTime_ms = 0;
+
+static uint64_t GetSteadyTime_ms()
+{
+  const auto now = std::chrono::steady_clock::now().time_since_epoch();
+  return std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+}
+
+static bool IsNoisyEvent( AudioEventId eventId )
+{
+  std::lock_guard<std::mutex> lock{ sNoisyEventMutex };
+  const auto it = sIsNoisyEventCache.find( eventId );
+  if ( it != sIsNoisyEventCache.end() ) {
+    return it->second;
+  }
+  const bool isNoisy = !( sQuietEventFunc && sQuietEventFunc( eventId ) );
+  sIsNoisyEventCache.emplace( eventId, isNoisy );
+  return isNoisy;
+}
+
+static void OnNoisyEventStarted()
+{
+  std::lock_guard<std::mutex> lock{ sNoisyEventMutex };
+  ++sNumNoisyEventsPlaying;
+  sLastNoisyEventTime_ms = GetSteadyTime_ms();
+}
+
+static void OnNoisyEventEnded()
+{
+  std::lock_guard<std::mutex> lock{ sNoisyEventMutex };
+  if ( sNumNoisyEventsPlaying > 0 ) {
+    --sNumNoisyEventsPlaying;
+  }
+  sLastNoisyEventTime_ms = GetSteadyTime_ms();
+}
   
 // Convert between Anki's AudioRTPCValueType & Wwise's RTPCValue_type
 AudioRTPCValueType ToRTCPValueType( AK::SoundEngine::Query::RTPCValue_type type );
@@ -703,6 +745,13 @@ static void EventCallbackFunc( AkCallbackType callbackType, AkCallbackInfo* call
   
   //FIXME: !!! Callback is called on Engine's thread Need to put it back on our thread !!!!!!!!!!!!!
   
+  if ( AK_EndOfEvent == callbackType ) {
+    const AkEventCallbackInfo* akCallback = static_cast<AkEventCallbackInfo*>( callbackInfo );
+    if ( IsNoisyEvent( static_cast<AudioEventId>( akCallback->eventID ) ) ) {
+      OnNoisyEventEnded();
+    }
+  }
+  
   if ( nullptr != callbackInfo->pCookie )
   {
     AudioCallbackContext* callbackContext = static_cast<AudioCallbackContext*>( callbackInfo->pCookie );
@@ -792,18 +841,44 @@ AudioPlayingId WwiseComponent::PostEvent( AudioEventId eventId, AudioGameObject 
   
   if ( _isInitialized )
   {
+    const bool isNoisy = IsNoisyEvent( eventId );
+    if ( isNoisy ) {
+      OnNoisyEventStarted();
+    }
+    
     if ( nullptr != callbackContext ) {
       AkCallbackType akFlags = ConvertCallbackType( callbackContext->GetCallbackFlags() );
       // Post Event with callback, always use AK_EndOfEvent to manage callback context object
       audioId = AK::SoundEngine::PostEvent( eventId, gameObject, akFlags | AK_EndOfEvent, &EventCallbackFunc, callbackContext );
     }
+    else if ( isNoisy ) {
+      audioId = AK::SoundEngine::PostEvent( eventId, gameObject, AK_EndOfEvent, &EventCallbackFunc, nullptr );
+    }
     else {
       audioId = AK::SoundEngine::PostEvent( eventId, gameObject);
+    }
+    
+    if ( isNoisy && ( kInvalidAudioPlayingId == audioId ) ) {
+      OnNoisyEventEnded();
     }
     AUDIO_LOG( "WwiseComponent.PostEvent: Posted audio event %u, resulted in play id [%u]", eventId, audioId );
   }
   
   return audioId;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void WwiseComponent::SetQuietEventFunc( QuietEventFunc&& func )
+{
+  std::lock_guard<std::mutex> lock{ sNoisyEventMutex };
+  sQuietEventFunc = std::move( func );
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+uint64_t WwiseComponent::GetLastNoisyEventTime_ms()
+{
+  std::lock_guard<std::mutex> lock{ sNoisyEventMutex };
+  return ( sNumNoisyEventsPlaying > 0 ) ? GetSteadyTime_ms() : sLastNoisyEventTime_ms;
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

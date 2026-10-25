@@ -20,6 +20,7 @@
 #include "coretech/common/engine/utils/data/dataPlatform.h"
 #include "audioEngine/audioScene.h"
 #include "audioEngine/soundbankLoader.h"
+#include "clad/audio/audioEventTypes.h"
 #include "clad/audio/audioGameObjectTypes.h"
 #include "json/json.h"
 #include "util/console/consoleInterface.h"
@@ -32,6 +33,7 @@
 #include "util/time/universalTime.h"
 #include "webServerProcess/src/webService.h"
 #include <chrono>
+#include <fnmatch.h>
 #include <iomanip>
 #include <set>
 #include <sstream>
@@ -64,6 +66,11 @@ using APT = Anki::AudioMetaData::GameParameter::ParameterType;
 const std::set<APT> kConsumableParameters =
   { APT::Robot_Vic_Meter_Bus_Sfx, APT::Robot_Vic_Meter_Bus_Tts, APT::Robot_Vic_Meter_Bus_Vo };
 const char* const kWebVizModuleName = "audioevents";
+
+const char* const kQuietEventPatterns[] = {
+  "Play__Robot_Vic_Sfx__Scrn_*_Short",
+  "Play__Robot_Vic_Sfx__Blink",
+};
 
 // Null-safe wrapper for Anki::AudioMetaData::EnumToString()
 std::string ToString(Anki::AudioMetaData::GameObjectType v)
@@ -329,6 +336,20 @@ CozmoAudioController::CozmoAudioController( const Anim::AnimContext* context )
   {
     // Setup Engine Logging callback
     SetLogOutput( ErrorLevel::All, &AudioEngineLogCallback );
+
+    SetQuietEventFunc( [] ( AudioEventId eventId ) {
+      using GenericEvent = AudioMetaData::GameEvent::GenericEvent;
+      const char* eventName = AudioMetaData::GameEvent::EnumToString( static_cast<GenericEvent>( eventId ) );
+      if ( nullptr == eventName ) {
+        return false;
+      }
+      for ( const char* pattern : kQuietEventPatterns ) {
+        if ( 0 == fnmatch( pattern, eventName, 0 ) ) {
+          return true;
+        }
+      }
+      return false;
+    } );
 
     InitializePluginInterface();
     GetPluginInterface()->SetupAkAlsaSinkPlugIn();
