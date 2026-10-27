@@ -3,7 +3,7 @@
 set -e
 
 CMAKE_VERSION="3.30.4"
-VICOS_SDK_VERSION="6.0.0-r08"
+VICOS_SDK_VERSION="6.1.0-r09"
 GO_VERSION="1.24.4"
 PROTOC_VERSION="31.1"
 PROTOC_GEN_GO_VERSION="v1.36.6"
@@ -68,7 +68,7 @@ function usage() {
 # defaults
 #
 VERBOSE=0
-CONFIGURE=1
+CONFIGURE=0
 GEN_SRC_ONLY=0
 RM_BUILD_ASSETS=0
 RUN_BUILD=1
@@ -103,8 +103,6 @@ while getopts ":x:c:p:a:t:g:F:D:hvfdCTeISXm" opt; do
             RUN_BUILD=0
             ;;
         D)
-            # -D defines on the command-line will force a reconfigure, save any dev gotchas
-            CONFIGURE=1
             DEFINES="${DEFINES} -D${OPTARG}"
             ;;
         d)
@@ -133,7 +131,6 @@ while getopts ":x:c:p:a:t:g:F:D:hvfdCTeISXm" opt; do
             GENERATOR="${OPTARG}"
             ;;
         F)
-            CONFIGURE=1
             FEATURES="${FEATURES} ${OPTARG}"
             ;;
         t)
@@ -261,13 +258,6 @@ for feature in ${FEATURES} ; do
 done
 
 #
-# Get short commit sha
-#
-export ANKI_BUILD_SHA=`git -c safe.directory="$TOPLEVEL" rev-parse --short HEAD`
-
-export ANKI_BUILD_BRANCH=`git -c safe.directory="$TOPLEVEL" rev-parse --abbrev-ref HEAD`
-
-#
 # Enable export flags
 #
 EXPORT_FLAGS=""
@@ -342,15 +332,28 @@ fi
 #
 # generate source lists
 #
+GEN_SRC_DIR="${TOPLEVEL}/generated/cmake"
 if [ $IGNORE_EXTERNAL_DEPENDENCIES -eq 0 ] || [ $CONFIGURE -eq 1 ] ; then
-    GEN_SRC_DIR="${TOPLEVEL}/generated/cmake"
-    if [ $CONFIGURE -eq 1 ] ; then
-      rm -rf "${GEN_SRC_DIR}"
-    fi
     mkdir -p "${GEN_SRC_DIR}"
 
     # Scan for BUILD.in files
     METABUILD_INPUTS=`find . -path "./.sim" -prune -o -name BUILD.in -print`
+
+    if [ $VERBOSE -eq 1 ]; then
+        METABUILD_VERBOSE="-v"
+    else
+        METABUILD_VERBOSE=""
+    fi
+
+    # Process BUILD.in files
+    ${BUILD_TOOLS}/metabuild/metabuild.py $METABUILD_VERBOSE \
+        --prune \
+        -o ${GEN_SRC_DIR} \
+        ${METABUILD_INPUTS}
+
+    if [ $GEN_SRC_ONLY -eq 1 ]; then
+        exit 0
+    fi
 fi
 
 # Set protobuf location
@@ -411,91 +414,86 @@ if [[ ! -x "$GOBIN/protoc-gen-go" ]] || [[ ! -x "$GOBIN/protoc-gen-grpc-gateway"
     GOBIN=$GOBIN "${GO_EXE}" install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@$PROTOC_GEN_GRPC_GATEWAY_VERSION
 fi
 
-#
-# generate source file lists
-#
+mkdir -p ${BUILD_DIR}
+pushd ${BUILD_DIR} > /dev/null 2>&1
 
-if [ $CONFIGURE -eq 1 ]; then
-    mkdir -p ${BUILD_DIR}
+if [ $VERBOSE -eq 1 ]; then
+    VERBOSE_ARG="-DCMAKE_VERBOSE_MAKEFILE=ON"
+else
+    VERBOSE_ARG=""
+fi
 
-    if [ $VERBOSE -eq 1 ]; then
-        METABUILD_VERBOSE="-v"
-    else
-        METABUILD_VERBOSE=""
+PLATFORM_ARGS=""
+if [ "$PLATFORM" == "mac" ]; then
+    PLATFORM_ARGS=(
+        -DMACOSX=1
+        -DANDROID=0
+        -DVICOS=0
+        -DCMAKE_TOOLCHAIN_FILE="${CMAKE_MODULE_DIR}/macosx.toolchain.cmake"
+    )
+elif [ "$PLATFORM" == "vicos" ] ; then
+    #
+    # If VICOS_SDK is set, use it, else download toolchain
+    #
+    if [ -z "${VICOS_SDK+x}" ]; then
+        ${TOPLEVEL}/project/build-scripts/download-vicos-sdk.sh "$VICOS_SDK_VERSION"
+        VICOS_SDK="${HOME}/.anki/vicos-sdk/dist/${VICOS_SDK_VERSION}"
     fi
 
-    # Process BUILD.in files
-    ${BUILD_TOOLS}/metabuild/metabuild.py $METABUILD_VERBOSE \
-        -o ${GEN_SRC_DIR} \
-        ${METABUILD_INPUTS}
+    PLATFORM_ARGS=(
+        -DMACOSX=0
+        -DANDROID=0
+        -DVICOS=1
+        -DVICOS_SDK="${VICOS_SDK}"
+        -DCMAKE_TOOLCHAIN_FILE="${CMAKE_MODULE_DIR}/vicos.oelinux.toolchain.cmake"
+        -DVICOS_CPP_FEATURES='rtti exceptions'
+    )
+else
+    echo "unknown platform: ${PLATFORM}"
+    exit 1
+fi
 
-    if [ $GEN_SRC_ONLY -eq 1 ]; then
-        exit 0
+# Append additional platrom args
+PLATFORM_ARGS+=(${ADDITIONAL_PLATFORM_ARGS[@]})
+
+CMAKE_ARGS=(
+    ${VERBOSE_ARG}
+    -G"${GENERATOR}"
+    -DANKI_GO_COMPILER=${GO_EXE}
+    -DANKI_UPX=${UPX_EXE}
+    -DANKI_PROTOC=${PROTOC_EXE}
+    -DANKI_GO_BIN_PATH=${GOBIN}
+    -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+    -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS}
+    -DPROTOBUF_HOME=${PROTOBUF_HOME}
+    -DCMAKE_COLOR_DIAGNOSTICS=ON
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=1
+    ${EXPORT_FLAGS}
+    ${FEATURE_FLAGS}
+    ${DEFINES}
+    "${PLATFORM_ARGS[@]}"
+)
+
+CONFIGURE_STAMP="${BUILD_DIR}/.build-victor-configure"
+CONFIGURE_SIGNATURE=$(printf '%s\n' "${CMAKE_EXE}" "${CMAKE_ARGS[@]}" \
+    "ANKI_BUILD_VERSION=${ANKI_BUILD_VERSION-}" "ANKI_BUILD_TAG=${ANKI_BUILD_TAG-}")
+
+if [ $CONFIGURE -eq 0 ]; then
+    if [[ ! -f "${CONFIGURE_STAMP}" ]] || [[ "$(cat "${CONFIGURE_STAMP}")" != "${CONFIGURE_SIGNATURE}" ]]; then
+        echo "cmake arguments changed, reconfiguring"
+        CONFIGURE=1
     fi
 fi
 
-pushd ${BUILD_DIR} > /dev/null 2>&1
-
 if [ $CONFIGURE -eq 1 ]; then
-
-    if [ $VERBOSE -eq 1 ]; then
-        VERBOSE_ARG="-DCMAKE_VERBOSE_MAKEFILE=ON"
-    else
-        VERBOSE_ARG=""
-    fi
-
-    PLATFORM_ARGS=""
-    if [ "$PLATFORM" == "mac" ]; then
-        PLATFORM_ARGS=(
-            -DMACOSX=1
-            -DANDROID=0
-            -DVICOS=0
-            -DCMAKE_TOOLCHAIN_FILE="${CMAKE_MODULE_DIR}/macosx.toolchain.cmake"
-        )
-    elif [ "$PLATFORM" == "vicos" ] ; then
-        #
-        # If VICOS_SDK is set, use it, else download toolchain
-        #
-        if [ -z "${VICOS_SDK+x}" ]; then
-            ${TOPLEVEL}/project/build-scripts/download-vicos-sdk.sh "$VICOS_SDK_VERSION"
-            VICOS_SDK="${HOME}/.anki/vicos-sdk/dist/${VICOS_SDK_VERSION}"
-        fi
-
-        PLATFORM_ARGS=(
-            -DMACOSX=0
-            -DANDROID=0
-            -DVICOS=1
-            -DVICOS_SDK="${VICOS_SDK}"
-            -DCMAKE_TOOLCHAIN_FILE="${CMAKE_MODULE_DIR}/vicos.oelinux.toolchain.cmake"
-            -DVICOS_CPP_FEATURES='rtti exceptions'
-        )
-        echo "${PLATFORM_ARGS[@]}"
-    else
-        echo "unknown platform: ${PLATFORM}"
-        exit 1
-    fi
-
-    # Append additional platrom args
-    PLATFORM_ARGS+=(${ADDITIONAL_PLATFORM_ARGS[@]})
-    echo "PLATFORM ARGS $PLATFORM_ARGS"
+    echo "PLATFORM ARGS ${PLATFORM_ARGS[@]}"
+    rm -f "${CONFIGURE_STAMP}"
     $CMAKE_EXE ${TOPLEVEL} \
-        ${VERBOSE_ARG} \
-        -G"${GENERATOR}" \
-        -DANKI_GO_COMPILER=${GO_EXE} \
-        -DANKI_UPX=${UPX_EXE} \
-        -DANKI_PROTOC=${PROTOC_EXE} \
-        -DANKI_GO_BIN_PATH=${GOBIN} \
-        -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
-        -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} \
-        -DPROTOBUF_HOME=${PROTOBUF_HOME} \
-        -DANKI_BUILD_SHA=${ANKI_BUILD_SHA} \
-        -DANKI_BUILD_BRANCH=${ANKI_BUILD_BRANCH} \
-        -DCMAKE_COLOR_DIAGNOSTICS=ON \
-        -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
-        ${EXPORT_FLAGS} \
-        ${FEATURE_FLAGS} \
-        ${DEFINES} \
-        "${PLATFORM_ARGS[@]}"
+        -U 'ANKI_*' \
+        -U 'REMOTE_CONSOLE_ENABLED' \
+        -U 'DO_DEV_POSE_CHECKS' \
+        "${CMAKE_ARGS[@]}"
+    printf '%s\n' "${CONFIGURE_SIGNATURE}" > "${CONFIGURE_STAMP}"
 fi
 
 if [ $RUN_BUILD -ne 1 ]; then

@@ -22,6 +22,7 @@
 #include "util/logging/logging.h"
 #include <algorithm>
 #include <set>
+#include <iterator>
 
 
 namespace Anki {

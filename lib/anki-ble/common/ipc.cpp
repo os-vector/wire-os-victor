@@ -22,6 +22,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <iterator>
 namespace Anki {
 namespace BluetoothDaemon {
 

@@ -12,6 +12,7 @@
 #include "util/logging/victorLogger.h"
 
 #include <ctype.h>
+#include <cstdlib>
 
 void error(const char * cmd, const char * str)
 {

@@ -12,6 +12,7 @@
  **/
 
 #include "webService.h"
+#include <atomic>
 
 #if !defined(ANKI_NO_WEBSERVER_ENABLED)
   #define ANKI_NO_WEBSERVER_ENABLED 0

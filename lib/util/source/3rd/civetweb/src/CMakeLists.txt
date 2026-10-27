@@ -9,6 +9,7 @@ anki_build_target_license(c-library "MIT,${CMAKE_SOURCE_DIR}/lib/util/source/3rd
 if (BUILD_SHARED_LIBS)
   target_compile_definitions(c-library PRIVATE CIVETWEB_DLL_EXPORTS)
 endif()
+target_compile_options(c-library PRIVATE -Wno-incompatible-pointer-types-discards-qualifiers)
 target_include_directories(
   c-library PUBLIC
   ${PROJECT_SOURCE_DIR}/include)
@@ -226,12 +227,6 @@ if (CIVETWEB_ENABLE_LUA)
   # Link all the Lua libraries
   target_link_libraries(c-library ${LUA_LIBRARIES})
 endif()
-
-# <anki> Strip library for deployment to robot </anki>
-if (VICOS)
-  include(anki_build_strip)
-  anki_build_strip(TARGET c-library)
-endif(VICOS)
 
 #
 # The web server executable

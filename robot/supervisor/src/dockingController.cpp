@@ -102,7 +102,7 @@ namespace Anki {
         // Speeds and accels
         f32 dockSpeed_mmps_ = 0;
         f32 dockAccel_mmps2_ = 0;
-        f32 dockDecel_mmps2_ = 0;
+        f32 dockDecel_mmps2_ __attribute__((unused)) = 0;
 
         // Lateral tolerance at dock pose
         // Is directly affected by camera extrinsics so it is slightly larger to try

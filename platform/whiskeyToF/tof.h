@@ -15,6 +15,7 @@
 
 #include "coretech/common/shared/types.h"
 #include "clad/types/tofTypes.h"
+#include <functional>
 
 namespace webots {
   class Supervisor;

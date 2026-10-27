@@ -84,8 +84,6 @@ set(VICOS_C_COMPILER   "${VICOS_LLVM_TOOLCHAIN_PREFIX}clang${VICOS_TOOLCHAIN_SUF
 set(VICOS_CXX_COMPILER "${VICOS_LLVM_TOOLCHAIN_PREFIX}clang++${VICOS_TOOLCHAIN_SUFFIX}")
 set(CMAKE_C_COMPILER_TARGET   ${VICOS_LLVM_TRIPLE})
 set(CMAKE_CXX_COMPILER_TARGET ${VICOS_LLVM_TRIPLE})
-set(CMAKE_C_COMPILER_EXTERNAL_TOOLCHAIN   "${VICOS_TOOLCHAIN_ROOT}")
-set(CMAKE_CXX_COMPILER_EXTERNAL_TOOLCHAIN "${VICOS_TOOLCHAIN_ROOT}")
 
 
 set(VICOS_COMPILER_FLAGS)
@@ -104,7 +102,7 @@ list(APPEND VICOS_COMPILER_FLAGS
 	-ffunction-sections
 	-fdata-sections
 	-funwind-tables
-	-fstack-protector-strong
+	-fno-stack-protector
 	# TFLite 2.19 has c++17-written headers - let's just ignore the use of these extensions now
 	-Wno-c++17-extensions
 	-no-canonical-prefixes)
@@ -115,8 +113,9 @@ list(APPEND VICOS_COMPILER_FLAGS_CXX
 list(APPEND VICOS_COMPILER_FLAGS_RELEASE
   -D_FORTIFY_SOURCE=2)
 list(APPEND VICOS_LINKER_FLAGS
-	-Wl,--no-warn-mismatch
 	-Wl,--build-id
+	-Wl,--icf=safe
+	-Wl,-z,pack-relative-relocs
 	#-Wl,--gdb-index
 	-Wl,--warn-shared-textrel
 	-Wl,--gc-sections
@@ -124,6 +123,15 @@ list(APPEND VICOS_LINKER_FLAGS
     -Wl,-rpath-link,${VICOS_SDK}/sysroot/lib
     -Wl,-rpath-link,${VICOS_SDK}/sysroot/usr/lib)
 #	-Wl,--fatal-warnings)
+option(VICOS_THINLTO "Build with ThinLTO" OFF)
+if(VICOS_THINLTO)
+  list(APPEND VICOS_COMPILER_FLAGS
+    -flto=thin)
+  list(APPEND VICOS_LINKER_FLAGS
+    -flto=thin
+    -Wl,--thinlto-jobs=8
+    -Wl,--thinlto-cache-dir=${CMAKE_BINARY_DIR}/lto-cache)
+endif()
 list(APPEND VICOS_LINKER_FLAGS_EXE
     -Wl,-rpath-link,${VICOS_SDK}/sysroot/lib
     -Wl,-rpath-link,${VICOS_SDK}/sysroot/usr/lib
@@ -151,8 +159,6 @@ list(APPEND VICOS_COMPILER_FLAGS
 	-mfloat-abi=hard
 	-mfpu=neon-vfpv4
 	-mcpu=cortex-a7)
-list(APPEND VICOS_LINKER_FLAGS
-	-Wl,--fix-cortex-a8)
 
 # Disable integrated-as for better compatibility.
 # list(APPEND ANDROID_COMPILER_FLAGS
@@ -161,8 +167,6 @@ list(APPEND VICOS_LINKER_FLAGS
 # STL specific flags for libc++
 set(VICOS_STL_PREFIX llvm-libc++)
 list(APPEND VICOS_LINKER_FLAGS
-    -lunwind
-    -lunwind-arm
 	-lc
 	-latomic
 	-lpthread)
@@ -171,12 +175,6 @@ list(APPEND VICOS_COMPILER_FLAGS_CXX
 	-std=c++14)
 
 set(CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES "")
-
-# Add libc++_shared.so
-set(VICOS_CXX_STANDARD_LIBRARIES "${VICOS_SDK}/sysroot/usr/lib/libc++.so")
-
-# Add libunwind
-set(VICOS_CXX_STANDARD_LIBRARIES "${VICOS_SDK}/sysroot/usr/lib/libunwind.so.8")
 
 set(CMAKE_C_STANDARD_LIBRARIES_INIT "-lm")
 set(CMAKE_CXX_STANDARD_LIBRARIES_INIT "${CMAKE_C_STANDARD_LIBRARIES_INIT}")

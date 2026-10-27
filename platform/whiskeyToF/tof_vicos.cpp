@@ -27,6 +27,7 @@
 #include <queue>
 #include <iomanip>
 #include <chrono>
+#include <atomic>
 
 #ifdef SIMULATOR
 #error SIMULATOR should be defined by any target using tof_vicos.cpp

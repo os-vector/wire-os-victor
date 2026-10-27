@@ -27,6 +27,7 @@
 
 #include <set>
 #include <unordered_map>
+#include <mutex>
 
 namespace Anki {
 namespace Vector {

@@ -29,6 +29,7 @@
 #include <cmath>
 #include <functional>
 #include <numeric>
+#include <iterator>
 
 namespace Anki {
   // Returns true if all elements of p1 match p2 according to compareFcn

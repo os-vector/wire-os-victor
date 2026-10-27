@@ -50,4 +50,8 @@ target_link_libraries(util
   ${ASAN_SHARED_LINKER_FLAGS}
 )
 
+if (VICOS)
+  target_link_options(util PRIVATE -Wl,-Bsymbolic-functions)
+endif()
+
 anki_build_strip(TARGET util)

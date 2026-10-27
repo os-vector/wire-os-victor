@@ -15,6 +15,7 @@
 #include "json/json.h"
 
 #include <assert.h>
+#include <algorithm>
 
 namespace Anki {
 namespace Util {

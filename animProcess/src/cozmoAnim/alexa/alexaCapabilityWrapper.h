@@ -15,6 +15,7 @@
 #define ANIMPROCESS_COZMO_ALEXA_ALEXACAPABILITYWRAPPER_H
 
 #include <AVSCommon/AVS/CapabilityAgent.h>
+#include <functional>
 
 namespace Anki {
 namespace Vector {

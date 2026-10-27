@@ -15,6 +15,7 @@
 #include "clad/types/sdkAudioTypes.h"
 #include "audioEngine/audioTools/standardWaveDataContainer.h"
 #include "audioEngine/audioTools/streamingWaveDataInstance.h"
+#include <functional>
 
 // Forward declarations
 namespace Anki {

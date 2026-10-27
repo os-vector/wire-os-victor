@@ -31,6 +31,7 @@
 #include <signal.h>
 
 #include <sys/time.h>
+#include <mutex>
 
 namespace Anki {
 namespace Util {

@@ -18,6 +18,8 @@
 #include <deque>
 #include <set>
 #include <vector>
+#include <functional>
+#include <memory>
 
 namespace Anki {
 

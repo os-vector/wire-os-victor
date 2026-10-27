@@ -18,6 +18,7 @@
 #include "util/stats/recentStatsAccumulator.h"
 #include <stddef.h>
 #include <vector>
+#include <functional>
 
 
 // Forward declarations

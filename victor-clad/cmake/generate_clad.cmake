@@ -19,6 +19,26 @@ function(generate_clad)
 
     set(OUTPUT_FILES "")
 
+    get_property(CLAD_ALL_DEPS_SET GLOBAL PROPERTY ANKI_CLAD_ALL_DEPS SET)
+    if (NOT CLAD_ALL_DEPS_SET)
+        file(GLOB_RECURSE CLAD_ALL_DEPS CONFIGURE_DEPENDS
+            ${CMAKE_SOURCE_DIR}/clad/*.clad
+            ${CMAKE_SOURCE_DIR}/coretech/common/clad_src/*.clad
+            ${CMAKE_SOURCE_DIR}/coretech/vision/clad_src/*.clad
+            ${CMAKE_SOURCE_DIR}/lib/util/source/anki/clad/*.clad
+            ${CMAKE_SOURCE_DIR}/robot/clad/*.clad
+            ${CMAKE_SOURCE_DIR}/victor-clad/clad/*.clad
+        )
+        file(GLOB CLAD_TOOL_DEPS CONFIGURE_DEPENDS
+            ${CMAKE_SOURCE_DIR}/victor-clad/tools/message-buffers/clad/*.py
+            ${CMAKE_SOURCE_DIR}/victor-clad/tools/message-buffers/emitters/*.py
+            ${CMAKE_SOURCE_DIR}/victor-clad/victorEmitters/*.py
+        )
+        list(APPEND CLAD_ALL_DEPS ${CLAD_TOOL_DEPS})
+        set_property(GLOBAL PROPERTY ANKI_CLAD_ALL_DEPS ${CLAD_ALL_DEPS})
+    endif()
+    get_property(CLAD_ALL_DEPS GLOBAL PROPERTY ANKI_CLAD_ALL_DEPS)
+
     foreach(CLAD_SRC ${genclad_SRCS})
         get_filename_component(SRC_DIR ${CLAD_SRC} DIRECTORY)
         get_filename_component(SRC_BASENAME ${CLAD_SRC} NAME_WE)
@@ -64,7 +84,7 @@ function(generate_clad)
 
         add_custom_command(
             COMMAND /usr/bin/env python3 ${genclad_EMITTER} ${genclad_FLAGS} ${INPUT_DIR} ${INCLUDES} ${OUTPUT_OPTION} ${CLAD_SRC_REL}
-            DEPENDS ${genclad_EMITTER} ${CLAD_SRC}
+            DEPENDS ${genclad_EMITTER} ${CLAD_SRC} ${CLAD_ALL_DEPS}
             OUTPUT ${CLAD_EMITTER_OUTPUTS}
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
             COMMENT "Generating code for ${CLAD_SRC}"

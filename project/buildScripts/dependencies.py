@@ -16,6 +16,7 @@ import glob
 import zipfile
 import shutil
 import concurrent.futures
+import filecmp
 from functools import partial
 
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -348,7 +349,7 @@ def convert_json_to_binary(json_files, bin_name, dest_dir, flatc_dir):
     try:
         bin_file = binary_conversion.main(tmp_json_files, bin_name, flatc_dir)
     except Exception as e:
-        print(("%s: %s" % (type(e).__name__, e.message)))
+        print(("%s: %s" % (type(e).__name__, e)))
         # If binary conversion failed, use the json files...
         for json_file in tmp_json_files:
             json_dest = os.path.join(dest_dir, os.path.basename(json_file))
@@ -356,7 +357,10 @@ def convert_json_to_binary(json_files, bin_name, dest_dir, flatc_dir):
             print(("Restored %s" % json_dest))
     else:
         bin_dest = os.path.join(dest_dir, bin_name)
-        shutil.move(bin_file, bin_dest)
+        if os.path.isfile(bin_dest) and filecmp.cmp(bin_file, bin_dest, shallow=False):
+            os.remove(bin_file)
+        else:
+            shutil.move(bin_file, bin_dest)
         shutil.rmtree(tmp_dir)
 
 
@@ -699,6 +703,10 @@ def write_animation_manifest(dest_dir, anim_name_length_mapping, additional_file
     output_data = json.dumps(all_anims, sort_keys=False, indent=2, separators=(',', ': '))
     output_file = os.path.join(dest_dir, output_json_file)
     if os.path.isfile(output_file):
+        with open(output_file) as fh:
+            if fh.read() == output_data:
+                print(("The animation manifest file (with %s entries) is unchanged = %s" % (len(all_anims), output_file)))
+                return
         os.remove(output_file)
     elif not os.path.exists(dest_dir):
         os.makedirs(dest_dir)

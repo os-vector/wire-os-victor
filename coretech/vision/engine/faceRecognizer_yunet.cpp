@@ -13,6 +13,7 @@
 #include "util/threading/threadPriority.h"
 
 #include <fstream>
+#include <iterator>
 
 #define LOG_CHANNEL "FaceRecognizer"
 

@@ -20,6 +20,7 @@
 #include "clad/types/lcdTypes.h"
 
 #include <thread>
+#include <atomic>
 
 namespace Anki {
 

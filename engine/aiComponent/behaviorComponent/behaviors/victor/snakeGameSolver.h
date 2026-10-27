@@ -15,6 +15,7 @@
 
 // todo: move nested classes into another file to avoid this
 #include "engine/aiComponent/behaviorComponent/behaviors/victor/snakeGame.h"
+#include <vector>
 
 namespace Anki {
 namespace Vector {

@@ -23,7 +23,7 @@ set(ANKI_BUILD_CXX_COMPILE_OPTIONS
   $<$<AND:$<CXX_COMPILER_ID:Clang>,$<VERSION_GREATER_EQUAL:${CMAKE_CXX_COMPILER_VERSION},5.0>>:-fdiagnostics-absolute-paths>
   -fdiagnostics-show-category=name
   -fsigned-char
-  -g
+  $<IF:$<BOOL:${VICOS}>,-gline-tables-only,-g>
   -Wall
   -Wconditional-uninitialized
   -Wformat

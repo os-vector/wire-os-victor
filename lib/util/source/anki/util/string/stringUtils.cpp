@@ -22,6 +22,7 @@
 #include "util/math/numericCast.h"
 #include "util/random/randomGenerator.h"
 #include "util/UUID/UUID.h"
+#include <locale>
 
 
 namespace Anki {

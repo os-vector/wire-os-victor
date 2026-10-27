@@ -16,6 +16,7 @@
 #include "engine/engineTimeStamp.h"
 #include <deque>
 #include <limits>
+#include <functional>
 
 namespace Anki {
 namespace Vector {

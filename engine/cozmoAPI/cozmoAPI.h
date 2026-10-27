@@ -19,6 +19,7 @@
 #include "json/json.h"
 
 #include <mutex>
+#include <functional>
 
 namespace Anki {
 

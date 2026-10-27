@@ -36,6 +36,7 @@
 
 #include <array>
 #include <cmath>
+#include <algorithm>
 
 #define DEBUG_IMU_FILTER 0
 

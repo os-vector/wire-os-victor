@@ -9,6 +9,7 @@
 
 #include "logtypes.h"
 #include "logging.h"
+#include <algorithm>
 
 namespace Anki {
 namespace Util {

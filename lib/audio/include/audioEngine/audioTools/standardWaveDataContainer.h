@@ -18,6 +18,7 @@
 #include "util/logging/logging.h"
 #include "util/helpers/templateHelpers.h"
 #include <vector>
+#include <new>
 
 
 namespace Anki {

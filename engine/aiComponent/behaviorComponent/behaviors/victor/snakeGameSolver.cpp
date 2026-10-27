@@ -20,6 +20,7 @@
 #include <list>
 #include <vector>
 #include <unordered_map>
+#include <algorithm>
 
 namespace Anki {
 namespace Vector {

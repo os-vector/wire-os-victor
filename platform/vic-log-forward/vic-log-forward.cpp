@@ -14,6 +14,7 @@
 
 #include <ctype.h>
 #include <log/logger.h>
+#include <cstdlib>
 
 #define PROCNAME    "vic-log-forward"
 

@@ -16,6 +16,7 @@
 #include <map>
 #include <string>
 #include <type_traits>
+#include <algorithm>
 
 namespace Anki {
 namespace Vector {

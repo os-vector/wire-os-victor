@@ -20,6 +20,7 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <cstddef>
+#include <vector>
 
 namespace Anki{
 namespace Util{

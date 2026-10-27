@@ -18,6 +18,7 @@
 #include <AK/AkWwiseSDKVersion.h>
 #include <AK/SoundEngine/Common/IAkPlugin.h>
 #include <AK/Tools/Common/AkAssert.h>
+#include <functional>
 
 // Plugin mechanism. Instanciation method that must be registered to the plug-in manager.
 AK::IAkPlugin* CreateStreamingWavePortal( AK::IAkPluginMemAlloc * in_pAllocator )

@@ -15,6 +15,7 @@
 #include <cstdio>
 #include <stdlib.h>
 #include "signals/simpleSignal.hpp"
+#include <iterator>
 
 namespace Anki {
 namespace Switchboard {

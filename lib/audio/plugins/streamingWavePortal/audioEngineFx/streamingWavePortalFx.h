@@ -20,6 +20,7 @@
 #include "streamingWavePortalParams.h"
 #include <AK/Plugin/PluginServices/AkFXDurationHandler.h>
 #include <memory>
+#include <functional>
 
 
 namespace Anki {

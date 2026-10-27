@@ -106,36 +106,29 @@ if (STANDALONE_SIM)
 endif()
 
 set(ANKI_BUILD_INFO_DIR "${CMAKE_BINARY_DIR}/buildInfo")
-file(CONFIGURE OUTPUT "${ANKI_BUILD_INFO_DIR}/ankiBuildSha.h" CONTENT
-"#pragma once
-#define ANKI_BUILD_SHA \"${ANKI_BUILD_SHA}\"
-#define ANKI_BUILD_BRANCH \"${ANKI_BUILD_BRANCH}\"
-")
+add_custom_target(anki_build_info ALL
+  COMMAND ${CMAKE_COMMAND}
+    -DANKI_SOURCE_DIR=${CMAKE_SOURCE_DIR}
+    -DANKI_BUILD_INFO_DIR=${ANKI_BUILD_INFO_DIR}
+    -DANKI_REVISION_FILE=${CMAKE_BINARY_DIR}/etc/revision
+    -P ${CMAKE_SOURCE_DIR}/cmake/gen-build-info.cmake
+  BYPRODUCTS "${ANKI_BUILD_INFO_DIR}/ankiBuildSha.h" "${CMAKE_BINARY_DIR}/etc/revision"
+  COMMENT "Checking git revision"
+  VERBATIM
+)
 
 #
 # Pass ANKI defines from the command-line to all targets
 #
 get_cmake_property(opts CACHE_VARIABLES)
 foreach(opt ${opts})
-  if(opt STREQUAL "ANKI_BUILD_SHA")
-  elseif(opt STREQUAL "ANKI_BUILD_BRANCH")
-    # ignore, set previously
-  elseif((opt STREQUAL "ANKI_PROTOC") OR (opt STREQUAL "ANKI_GO_COMPILER") OR (opt STREQUAL "ANKI_UPX") OR (opt STREQUAL "ANKI_GO_BIN_PATH") OR (opt STREQUAL "ANKI_DISABLE_ALEXA"))
+  if((opt STREQUAL "ANKI_PROTOC") OR (opt STREQUAL "ANKI_GO_COMPILER") OR (opt STREQUAL "ANKI_UPX") OR (opt STREQUAL "ANKI_GO_BIN_PATH") OR (opt STREQUAL "ANKI_DISABLE_ALEXA"))
 
   # we whitelist which defines are allowed to be added to prevent hidden, unexpected defines from sneaking in
   elseif((opt MATCHES "ANKI_") OR (opt MATCHES "REMOTE_CONSOLE_ENABLED") OR (opt MATCHES "DO_DEV_POSE_CHECKS"))
-    get_property(helpstring CACHE ${opt} PROPERTY HELPSTRING)
-
-    if(${helpstring} MATCHES "cached value")
-      # value was set from a previous run, but not this run, turn off
-      # Note: remove_definitions #defines the value as OFF (which itself is undefined)
-      unset(${opt} CACHE)
-      add_definitions(-U${opt})
-    else()
-      # value was set this run, from the command-line
+    get_property(opt_type CACHE ${opt} PROPERTY TYPE)
+    if(opt_type STREQUAL "UNINITIALIZED")
       add_definitions(-D${opt}=${${opt}})
-      set_property(CACHE ${opt} PROPERTY HELPSTRING "cached value from a previous command-line")
-
     endif()
   endif()
 endforeach()
@@ -158,6 +151,9 @@ set(ANKI_EXTERNAL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/EXTERNALS")
 set(ANKI_THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rd")
 
 set(ANKI_SRCLIST_DIR "${CMAKE_SOURCE_DIR}/generated/cmake")
+
+file(GLOB ANKI_SRCLIST_FILES "${ANKI_SRCLIST_DIR}/*.lst")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${ANKI_SRCLIST_FILES})
 
 set(CLAD_BASE_DIR "${CMAKE_SOURCE_DIR}/victor-clad/tools/message-buffers")
 set(CLAD_VICTOR_EMITTER_DIR "${CMAKE_SOURCE_DIR}/victor-clad/victorEmitters")

@@ -21,6 +21,7 @@
 #include <iomanip>
 #include <sstream>
 #include <thread>
+#include <algorithm>
 
 #define LOG_CHANNEL "Microphones"
 

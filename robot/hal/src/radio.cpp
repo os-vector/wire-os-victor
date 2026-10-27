@@ -33,7 +33,7 @@ namespace Anki {
       LocalUdpServer server;
 
       u8 recvBuf_[RECV_BUFFER_SIZE];
-      size_t recvBufSize_ = 0;
+      size_t recvBufSize_ __attribute__((unused)) = 0;
     }
 
 

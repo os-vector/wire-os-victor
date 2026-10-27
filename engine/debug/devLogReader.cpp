@@ -13,6 +13,7 @@
 
 #include "util/fileUtils/fileUtils.h"
 #include "util/logging/logging.h"
+#include <algorithm>
 
 namespace Anki {
 namespace Vector {

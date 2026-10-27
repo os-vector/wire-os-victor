@@ -23,6 +23,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <functional>
 
 namespace Anki
 {

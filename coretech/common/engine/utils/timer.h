@@ -25,6 +25,7 @@
 
 #include "coretech/common/shared/types.h"
 #include "util/logging/iTickTimeProvider.h"
+#include <atomic>
 
 
 namespace Anki {

@@ -16,6 +16,8 @@
 #include "taskExecutor.h"
 
 #include <condition_variable>
+#include <functional>
+#include <algorithm>
 
 namespace Anki
 {

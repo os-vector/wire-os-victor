@@ -16,6 +16,7 @@
 #define __Engine_AiComponent_StateConceptStrategies_ConditionLambda_H__
 
 #include "engine/aiComponent/beiConditions/iBEICondition.h"
+#include <functional>
 
 namespace Anki {
 namespace Vector {

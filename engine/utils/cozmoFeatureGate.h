@@ -15,6 +15,7 @@
 
 #include "util/featureGate/featureGate.h"
 #include "util/signals/simpleSignal_fwd.h"
+#include <functional>
 
 namespace Json {
   class Value;

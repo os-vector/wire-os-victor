@@ -78,6 +78,10 @@ class IndentedTextIOWrapper(io.StringIO):
 
     def _write_to_file(self):
         if self.path is not None:
+            if os.path.exists(self.path):
+                with open(self.path, 'r', newline='\n') as existing:
+                    if existing.read() == self.getvalue():
+                        return
             with self._open_file(self.path, 'w') as output:
                 output.write(self.getvalue())
             if os.path.exists(self.path):
