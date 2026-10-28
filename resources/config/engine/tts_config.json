@@ -21,13 +21,13 @@
     "en":
     {
       "voice": "colibri-ben_enu",
-      "speed": 80,
+      "speed": 76,
       "speedTraits": [
         { "textLengthMin": 0, "textLengthMax": 10, "rangeMin": 68, "rangeMax": 68},
-        { "textLengthMin": 10, "textLengthMax": 9999, "rangeMin": 83, "rangeMax": 83}
+        { "textLengthMin": 10, "textLengthMax": 9999, "rangeMin": 76, "rangeMax": 76}
       ],
-      "pitch": 100,
-      "shaping": 130
+      "pitch": 94,
+      "shaping": 120
     },
     "fr":
     {
@@ -65,13 +65,13 @@
     "en":
     {
       "voice": "co-USEnglish-Bendnn-22khz/enu/enu_bendnn_22k_co.fl.ini",
-      "speed": 80,
+      "speed": 76,
       "speedTraits": [
         { "textLengthMin": 0, "textLengthMax": 10, "rangeMin": 68, "rangeMax": 68},
-        { "textLengthMin": 10, "textLengthMax": 9999, "rangeMin": 83, "rangeMax": 83}
+        { "textLengthMin": 10, "textLengthMax": 9999, "rangeMin": 76, "rangeMax": 76}
       ],
-      "pitch": 100,
-      "shaping": 130
+      "pitch": 94,
+      "shaping": 120
     },
     "fr":
     {
