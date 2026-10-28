@@ -6,9 +6,8 @@
 // Top-level object contains a nested object for each supported platform.
 // Each platform object contains a nested object for each supported language.
 //
-// Note that Acapela TTS SDK does not support pitch setting on all platforms.
-// Pitch values are included here for documentation but pitch adjustment
-// is actually performed by audio layer.
+// Speed and pitch are passed separately to the platform TTS provider.
+// Pitch control support depends on the installed Acapela voice and SDK.
 //
 // These parameters determine the "base voice" used for each locale,
 // regardless of how a specific utterance will be used.  See
@@ -21,12 +20,12 @@
     "en":
     {
       "voice": "colibri-ben_enu",
-      "speed": 76,
+      "speed": 80,
       "speedTraits": [
         { "textLengthMin": 0, "textLengthMax": 10, "rangeMin": 68, "rangeMax": 68},
-        { "textLengthMin": 10, "textLengthMax": 9999, "rangeMin": 76, "rangeMax": 76}
+        { "textLengthMin": 10, "textLengthMax": 9999, "rangeMin": 83, "rangeMax": 83}
       ],
-      "pitch": 94,
+      "pitch": 85,
       "shaping": 120
     },
     "fr":
@@ -65,12 +64,12 @@
     "en":
     {
       "voice": "co-USEnglish-Bendnn-22khz/enu/enu_bendnn_22k_co.fl.ini",
-      "speed": 76,
+      "speed": 80,
       "speedTraits": [
         { "textLengthMin": 0, "textLengthMax": 10, "rangeMin": 68, "rangeMax": 68},
-        { "textLengthMin": 10, "textLengthMax": 9999, "rangeMin": 76, "rangeMax": 76}
+        { "textLengthMin": 10, "textLengthMax": 9999, "rangeMin": 83, "rangeMax": 83}
       ],
-      "pitch": 94,
+      "pitch": 85,
       "shaping": 120
     },
     "fr":
