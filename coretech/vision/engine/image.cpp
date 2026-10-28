@@ -1319,8 +1319,8 @@ namespace Vision {
         uint32x4_t which32x4_2 = vmovl_u16(which16x4_2);
         float32x4_t whichF32x4_1 = vcvtq_f32_u32(which32x4_1);
         float32x4_t whichF32x4_2 = vcvtq_f32_u32(which32x4_2);
-        hsv1.val[0] = vmulq_n_f32(whichF32x4_1, (360/255.f) * (1/60.f));
-        hsv2.val[0] = vmulq_n_f32(whichF32x4_2, (360/255.f) * (1/60.f));
+        hsv1.val[0] = vmulq_n_f32(whichF32x4_1, (360/256.f) * (1/60.f));
+        hsv2.val[0] = vmulq_n_f32(whichF32x4_2, (360/256.f) * (1/60.f));
 
         // Expand S to float and convert from 0-255 to 0-1
         which16x8 = vmovl_u8(hsv255.val[1]);
