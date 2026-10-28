@@ -38,6 +38,25 @@ namespace Vector {
     GaussianFilter = 2,
   };
 
+  enum class EyeShape : u8 {
+    Rounded = 0,
+    Heptagon = 1,
+  };
+
+  // Clockwise, in eye-local coordinates. A flat top, clipped upper corners,
+  // vertical sides and a pointed base give the outline seven edges. Deeper
+  // corner cuts keep the facets visible after smoothing at display resolution.
+  static const std::array<cv::Point2f, 7> kHeptagonOutline{{
+    { 0.45f, -1.f },
+    { 1.f, -0.4f },
+    { 1.f,  0.5f },
+    { 0.f,  1.f },
+    {-1.f,  0.5f },
+    {-1.f, -0.4f },
+    {-0.45f, -1.f },
+  }};
+
+  CONSOLE_VAR_ENUM(u8,      kProcFace_EyeShape,                   CONSOLE_GROUP, static_cast<u8>(EyeShape::Heptagon), "Rounded,Heptagon");
   CONSOLE_VAR_ENUM(u8,      kProcFace_LineType,                   CONSOLE_GROUP, IsXray() ? 2 : 1, "Line_4,Line_8,Line_AA"); // Only affects OpenCV drawing, not post-smoothing
   CONSOLE_VAR_ENUM(u8,      kProcFace_InterpolationType,          CONSOLE_GROUP, 1, "Nearest,Linear,Cubic,Area,Lanczos,LinearExact,Max,WarpFillOutliers");
   CONSOLE_VAR_RANGED(s32,   kProcFace_EllipseDelta,               CONSOLE_GROUP, IsXray() ? 15 : 10, 1, 90);
@@ -349,7 +368,12 @@ void ProceduralFaceDrawer::LoadCustomEyePNG()
     const s32 kLineType = kLineTypes[kProcFace_LineType];
 
     // 1. Eye shape poly
-    {
+    if(kProcFace_EyeShape == static_cast<u8>(EyeShape::Heptagon)) {
+      eyePoly.reserve(kHeptagonOutline.size());
+      for(const auto& point : kHeptagonOutline) {
+        eyePoly.emplace_back(ROUND(point.x * halfEyeWidth), ROUND(point.y * halfEyeHeight));
+      }
+    } else {
       //ANKI_CPU_PROFILE("EyeShapePoly");
       // Upper right corner
       if(upRightRadX > 0 && upRightRadY > 0) {
@@ -756,9 +780,14 @@ void ProceduralFaceDrawer::LoadCustomEyePNG()
   {
     ANKI_CPU_PROFILE("DrawEyes");
 
+    // The console setting is outside faceData, so changing it must also
+    // invalidate a stationary face. -1 forces the first face to render.
+    static int cachedEyeShape = -1;
+
     if(!dirty) {
       
-      if (_faceCache.faceData.GetParameters(WhichEye::Left) != faceData.GetParameters(WhichEye::Left) ||
+      if (cachedEyeShape != kProcFace_EyeShape ||
+          _faceCache.faceData.GetParameters(WhichEye::Left) != faceData.GetParameters(WhichEye::Left) ||
           _faceCache.faceData.GetParameters(WhichEye::Right) != faceData.GetParameters(WhichEye::Right) ||
           _faceCache.faceData.GetFaceAngle() != faceData.GetFaceAngle() ||
           _faceCache.faceData.GetFacePosition() != faceData.GetFacePosition() ||
@@ -772,6 +801,7 @@ void ProceduralFaceDrawer::LoadCustomEyePNG()
 
     if(dirty) {
       // Update parameters used to generate this cached image
+      cachedEyeShape = kProcFace_EyeShape;
       _faceCache.faceData.SetParameters(WhichEye::Left, faceData.GetParameters(WhichEye::Left));
       _faceCache.faceData.SetParameters(WhichEye::Right, faceData.GetParameters(WhichEye::Right));
 

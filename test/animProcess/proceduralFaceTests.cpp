@@ -8,6 +8,7 @@
 #include "coretech/common/shared/types.h"
 #include "coretech/common/shared/array2d.h"
 #include "cannedAnimLib/proceduralFace/proceduralFaceDrawer.h"
+#include "util/console/consoleInterface.h"
 #include "util/random/randomGenerator.h"
 #include "util/fileUtils/fileUtils.h"
 
@@ -19,6 +20,13 @@ using namespace Anki;
 using namespace Anki::Vector;
 
 extern std::string resourcePath;
+
+namespace Anki {
+namespace Vector {
+  CONSOLE_VAR_EXTERN(u8, kProcFace_EyeShape)
+  CONSOLE_VAR_EXTERN(s32, kProcFace_NoiseNumFrames)
+}
+}
 
 // Sweep all parameters and make sure we don't trigger an assert or crash when
 // we try to actually draw the face. (Clipping should prevent that.)
@@ -110,6 +118,79 @@ static double ImageDifferenceFraction(const Vision::ImageRGB565& testImage, cons
   return tooDifferentFraction;
 }
 
+class HeptagonalFaceTest : public ::testing::Test
+{
+protected:
+  void SetUp() override
+  {
+    _previousShape = kProcFace_EyeShape;
+    _previousNoiseFrames = kProcFace_NoiseNumFrames;
+    kProcFace_EyeShape = 1;
+    kProcFace_NoiseNumFrames = 0;
+  }
+
+  void TearDown() override
+  {
+    kProcFace_EyeShape = _previousShape;
+    kProcFace_NoiseNumFrames = _previousNoiseFrames;
+  }
+
+private:
+  u8 _previousShape = 0;
+  s32 _previousNoiseFrames = 0;
+};
+
+TEST_F(HeptagonalFaceTest, ShapeChangeInvalidatesStationaryFace)
+{
+  ProceduralFace face;
+  Util::RandomGenerator rng(1);
+  Vision::ImageRGB565 heptagon, rounded, restoredHeptagon;
+  ProceduralFaceDrawer::DrawFace(face, rng, heptagon);
+
+  kProcFace_EyeShape = 0;
+  ProceduralFaceDrawer::DrawFace(face, rng, rounded);
+  EXPECT_GT(ImageDifferenceFraction(heptagon, rounded), 0.01);
+
+  kProcFace_EyeShape = 1;
+  ProceduralFaceDrawer::DrawFace(face, rng, restoredHeptagon);
+  EXPECT_DOUBLE_EQ(ImageDifferenceFraction(heptagon, restoredHeptagon), 0.0);
+}
+
+TEST_F(HeptagonalFaceTest, BlinkRestoresOriginalExpression)
+{
+  ProceduralFace face;
+  face.SetParameterBothEyes(ProceduralFace::Parameter::UpperLidY, 0.2f);
+  const ProceduralFace originalFace = face;
+  Util::RandomGenerator rng(1);
+  Vision::ImageRGB565 beforeBlink, frame, afterBlink;
+  ProceduralFaceDrawer::DrawFace(face, rng, beforeBlink);
+
+  BlinkState state;
+  TimeStamp_t offset;
+  bool sawClosedEyes = false;
+  bool moreFrames = true;
+  int numFrames = 0;
+  while(moreFrames && numFrames < 16) {
+    moreFrames = ProceduralFaceDrawer::GetNextBlinkFrame(face, state, offset);
+    ProceduralFaceDrawer::DrawFace(face, rng, frame);
+    if(moreFrames && state == BlinkState::Closed) {
+      sawClosedEyes = true;
+      EXPECT_GT(ImageDifferenceFraction(beforeBlink, frame), 0.01);
+    }
+    ++numFrames;
+  }
+
+  EXPECT_FALSE(moreFrames);
+  EXPECT_TRUE(sawClosedEyes);
+  EXPECT_TRUE(face == originalFace);
+  // Changing the outline forces a fresh render of the restored expression.
+  kProcFace_EyeShape = 0;
+  ProceduralFaceDrawer::DrawFace(face, rng, frame);
+  kProcFace_EyeShape = 1;
+  ProceduralFaceDrawer::DrawFace(face, rng, afterBlink);
+  EXPECT_DOUBLE_EQ(ImageDifferenceFraction(beforeBlink, afterBlink), 0.0);
+}
+
 static void testFaceAgainstStoredVersion(const ProceduralFace& procFace, const std::string& filename)
 {
   // Generate procedural face
@@ -121,7 +202,11 @@ static void testFaceAgainstStoredVersion(const ProceduralFace& procFace, const s
   //       the duration of the test. For determinism hard-code the same seed for all tests.
   Util::RandomGenerator rng(1);
 
+  // Existing reference images use the original rounded outline.
+  const u8 previousShape = kProcFace_EyeShape;
+  kProcFace_EyeShape = 0;
   ProceduralFaceDrawer::DrawFace(procFace, rng, procFaceImg);
+  kProcFace_EyeShape = previousShape;
 #if GENERATE_TEST_FILES
   const size_t slash = filename.find_last_of("/");
   const std::string generatedFilename = std::string("/")+Util::FileUtils::FullFilePath({"tmp", filename.substr(slash+1)});
