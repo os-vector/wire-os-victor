@@ -25,7 +25,10 @@ public:
 
 	static void copy(float* dest, const float* src, int num) noexcept
 	{
-		memcpy(dest, src, (size_t)num * sizeof(float));
+		if (num > 0)
+		{
+			memcpy(dest, src, (size_t)num * sizeof(float));
+		}
 	}
 
 	static void copyWithMultiply(float* dest, const float* src, float multiplier, int num) noexcept
@@ -54,7 +57,10 @@ public:
 
 	static void clear(float* dest, int num) noexcept
 	{
-		memset(dest, 0, (size_t)num * sizeof(float));
+		if (num > 0)
+		{
+			memset(dest, 0, (size_t)num * sizeof(float));
+		}
 	}
 
 	static void multiply(float* dest, float multiplier, int num)
