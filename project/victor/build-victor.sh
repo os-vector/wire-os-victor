@@ -358,9 +358,7 @@ fi
 
 # Set protobuf location
 HOST=`uname -a | awk '{print tolower($1);}' | sed -e 's/darwin/mac/'`
-if [[ `uname -a` == *"aarch64"* && $HOST == "linux" ]]; then
-	HOST+="-arm64"
-elif [[ `uname -a` == *"aarch64"* && $HOST == "mac" ]]; then
+if [[ "$(uname -m)" == "aarch64" || "$(uname -m)" == "arm64" ]]; then
 	HOST+="-arm64"
 fi
 PROTOBUF_HOME=${TOPLEVEL}/3rd/protobuf/${HOST}
@@ -462,7 +460,6 @@ CMAKE_ARGS=(
     -DANKI_GO_COMPILER=${GO_EXE}
     -DANKI_UPX=${UPX_EXE}
     -DANKI_PROTOC=${PROTOC_EXE}
-    -DANKI_GO_BIN_PATH=${GOBIN}
     -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
     -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS}
     -DPROTOBUF_HOME=${PROTOBUF_HOME}
