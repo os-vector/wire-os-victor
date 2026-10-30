@@ -6,7 +6,8 @@ if [ $# -eq 0 ]; then
 fi
 
 GIT_PROJ_ROOT=`git rev-parse --show-toplevel`
-VICOS_SDK=`${GIT_PROJ_ROOT}/tools/build/tools/ankibuild/vicos.py --find 5.2.1-r06`
+VICOS_SDK_VERSION="$(cat "${GIT_PROJ_ROOT}/project/VICOS_SDK_VERSION")"
+: ${VICOS_SDK:="${HOME}/.anki/vicos-sdk/dist/${VICOS_SDK_VERSION}"}
 
 if [ ! -d "$VICOS_SDK" ]; then
 	echo "Could not find vicos SDK"
@@ -14,9 +15,9 @@ if [ ! -d "$VICOS_SDK" ]; then
 fi
 
 VICOS_BIN=$VICOS_SDK/prebuilt/bin
-LINUX_VERSION=$VICOS_BIN/arm-oe-linux-gnueabi-$1
-if [ -f "$LINUX_VERSION" ]; then
-	echo "$LINUX_VERSION"
+LLVM_VERSION=$VICOS_BIN/llvm-$1
+if [ -e "$LLVM_VERSION" ]; then
+	echo "$LLVM_VERSION"
 	exit 0
 fi
 

@@ -2,11 +2,11 @@ CompileFlags:
   Add: 
     - -nostdinc++
     - -isystem
-    - HOME_REPLACE/.anki/vicos-sdk/dist/6.1.0-r09/sysroot/usr/include/c++/v1
+    - VICOS_SDK_REPLACE/sysroot/usr/include/c++/v1
     - -isystem
-    - HOME_REPLACE/.anki/vicos-sdk/dist/6.1.0-r09/sysroot/usr/include
+    - VICOS_SDK_REPLACE/sysroot/usr/include
     - -isystem
-    - HOME_REPLACE/.anki/vicos-sdk/dist/6.1.0-r09/sysroot/usr/local/include
+    - VICOS_SDK_REPLACE/sysroot/usr/local/include
 Diagnostics:
   Suppress:
     - unused-includes

@@ -76,7 +76,7 @@ elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL Darwin)
 endif()
 
 set(VICOS_TOOLCHAIN_ROOT "${VICOS_SDK}/prebuilt")
-set(VICOS_TOOLCHAIN_PREFIX "${VICOS_TOOLCHAIN_ROOT}/bin/${VICOS_TOOLCHAIN_NAME}-")
+set(VICOS_TOOLCHAIN_PREFIX "${VICOS_TOOLCHAIN_ROOT}/bin/llvm-")
 
 # BRC these defines are important
 set(VICOS_LLVM_TOOLCHAIN_PREFIX "${VICOS_SDK}/prebuilt/bin/${VICOS_TOOLCHAIN_NAME}-")
@@ -239,6 +239,11 @@ endif()
 set(CMAKE_C_COMPILER        "${VICOS_C_COMPILER}")
 set(CMAKE_CXX_COMPILER      "${VICOS_CXX_COMPILER}")
 set(_CMAKE_TOOLCHAIN_PREFIX "${VICOS_TOOLCHAIN_PREFIX}")
+set(CMAKE_LINKER "${VICOS_TOOLCHAIN_ROOT}/bin/ld.lld" CACHE FILEPATH "" FORCE)
+foreach(tool AR RANLIB NM OBJCOPY OBJDUMP READELF STRIP ADDR2LINE)
+  string(TOLOWER ${tool} tool_name)
+  set(CMAKE_${tool} "${VICOS_TOOLCHAIN_PREFIX}${tool_name}" CACHE FILEPATH "" FORCE)
+endforeach()
 
 # Run the compiler ID checks before we set flags.
 # When passed the `-march=` flag, Clang can fail to compile if CMake doesn't

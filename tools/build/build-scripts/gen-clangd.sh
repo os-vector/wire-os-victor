@@ -6,10 +6,6 @@ export GIT_PROJ_ROOT="$(
 )"
 
 cd "${GIT_PROJ_ROOT}"
+: ${VICOS_SDK:="${HOME}/.anki/vicos-sdk/dist/$(cat project/VICOS_SDK_VERSION)"}
 echo '#DO NOT MODIFY THIS FILE. IF YOU WANT DIFFERENT DIAGNOSTICS, MODIFY tools/build/build-tools/clangd-template, then rebuild' > .clangd
-cat tools/build/build-scripts/clangd-template >> .clangd
-if [[ "$(uname)" == "Darwin" ]]; then
-  sed -i '' "s|HOME_REPLACE|$HOME|g" .clangd
-else
-  sed -i "s|HOME_REPLACE|$HOME|g" .clangd
-fi
+sed "s|VICOS_SDK_REPLACE|${VICOS_SDK}|g" tools/build/build-scripts/clangd-template >> .clangd

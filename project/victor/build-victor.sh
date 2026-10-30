@@ -3,7 +3,6 @@
 set -e
 
 CMAKE_VERSION="3.30.4"
-VICOS_SDK_VERSION="6.1.0-r09"
 GO_VERSION="1.24.4"
 PROTOC_VERSION="31.1"
 PROTOC_GEN_GO_VERSION="v1.36.6"
@@ -18,6 +17,7 @@ fi
 SCRIPT_PATH=$(dirname $([ -L $0 ] && echo "$(dirname $0)/$(readlink -n $0)" || echo $0))
 SCRIPT_NAME=`basename ${0}`
 TOPLEVEL=$(cd "${SCRIPT_PATH}/../.." && pwd)
+VICOS_SDK_VERSION="$(cat "${TOPLEVEL}/project/VICOS_SDK_VERSION")"
 BUILD_TOOLS="${TOPLEVEL}/tools/build/tools"
 if [[ "$(uname -a)" == *"Linux"* ]]; then
 REQUIRED_GLIBC="2.35"
