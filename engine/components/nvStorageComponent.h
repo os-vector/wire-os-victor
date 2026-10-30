@@ -25,6 +25,7 @@
 #include <vector>
 #include <map>
 #include <unordered_map>
+#include <functional>
 
 namespace Anki {
 namespace Vector {

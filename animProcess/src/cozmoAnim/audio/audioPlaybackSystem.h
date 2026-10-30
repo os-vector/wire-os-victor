@@ -18,6 +18,7 @@
 #include "coretech/common/shared/types.h"
 
 #include <queue>
+#include <memory>
 
 
 namespace Anki {

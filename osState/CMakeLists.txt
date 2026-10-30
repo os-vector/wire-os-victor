@@ -8,6 +8,7 @@ anki_build_cxx_library(osState ${ANKI_SRCLIST_DIR})
 anki_build_target_license(osState "ANKI")
 
 target_include_directories(osState PRIVATE ${ANKI_BUILD_INFO_DIR})
+add_dependencies(osState anki_build_info)
 
 set(PLATFORM_LIBS "")
 set(PLATFORM_COMPILE_DEFS "")

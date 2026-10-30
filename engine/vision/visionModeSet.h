@@ -15,6 +15,7 @@
 #include "clad/types/visionModes.h"
 
 #include <set>
+#include <algorithm>
 
 namespace Anki {
 namespace Vector {

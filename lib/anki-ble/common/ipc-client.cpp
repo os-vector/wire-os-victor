@@ -23,6 +23,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <cstdlib>
 
 namespace Anki {
 namespace BluetoothDaemon {

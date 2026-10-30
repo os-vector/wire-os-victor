@@ -23,6 +23,7 @@
 
 #include <ctime>
 #include <cmath>
+#include <algorithm>
 
 #define LOG_CHANNEL    "AnkiLab"
 

@@ -19,6 +19,7 @@
 #include "coretech/vision/engine/imageCache.h"
 
 #include "clad/types/visionModes.h"
+#include <atomic>
 
 namespace Anki {
 namespace Vector {

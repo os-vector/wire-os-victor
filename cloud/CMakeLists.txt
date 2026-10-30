@@ -89,7 +89,7 @@ else()
 endif()
 
 set(PROTO_SRC_DIR "${GATEWAY_PROTO_HOME_DIR}/public")
-file(GLOB PROTO_FILES "${PROTO_SRC_DIR}/*.proto")
+file(GLOB PROTO_FILES CONFIGURE_DEPENDS "${PROTO_SRC_DIR}/*.proto")
 
 set(GENERATED_GO_FILES "")
 foreach(proto IN LISTS PROTO_FILES)

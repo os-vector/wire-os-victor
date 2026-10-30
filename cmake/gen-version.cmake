@@ -3,7 +3,7 @@
 #
 # Copyright Anki, Inc. 2018
 #
-# Generates a files containing info in  <build>/etc/{version,revision}
+# Generates a files containing info in  <build>/etc/version
 
 #
 # <build>/etc/version
@@ -21,6 +21,9 @@
 # build_tag = optional tag specifier for build
 
 # read base version from VERSION file
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  ${CMAKE_SOURCE_DIR}/ANKI_VERSION
+  ${CMAKE_SOURCE_DIR}/VICTOR_COMPAT_VERSION)
 file(READ ${CMAKE_SOURCE_DIR}/ANKI_VERSION BASE_VERSION)
 string(STRIP ${BASE_VERSION} BASE_VERSION)
 
@@ -44,28 +47,6 @@ endif()
 
 configure_file(${CMAKE_SOURCE_DIR}/templates/cmake/version.in
                ${CMAKE_BINARY_DIR}/etc/version
-               @ONLY)
-
-
-#
-# <build>/etc/revision
-#
-
-# if ANKI_BUILD_VICTOR_REV contains the git revision, use it
-set(ANKI_BUILD_VICTOR_REV "")
-if (DEFINED ENV{ANKI_BUILD_VICTOR_REV})
-    set(ANKI_BUILD_VICTOR_REV $ENV{ANKI_BUILD_VICTOR_REV})
-else()
-    execute_process(
-      COMMAND git rev-parse --short HEAD
-      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-      OUTPUT_VARIABLE ANKI_BUILD_VICTOR_REV
-      OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-endif()
-
-configure_file(${CMAKE_SOURCE_DIR}/templates/cmake/revision.in
-               ${CMAKE_BINARY_DIR}/etc/revision
                @ONLY)
 
 # Set the VICTOR_COMPAT_VERSION from the file

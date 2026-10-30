@@ -15,6 +15,7 @@
 #define __Util_QuestEngine_QuestNotice_H__
 
 #include <string>
+#include <ctime>
 
 namespace Anki {
 namespace Util {

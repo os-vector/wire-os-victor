@@ -14,6 +14,7 @@
 
 #include "coretech/vision/engine/debayer.h"
 #include <array>
+#include <functional>
 
 namespace Anki {
 namespace Vision {

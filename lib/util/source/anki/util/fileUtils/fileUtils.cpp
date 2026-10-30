@@ -19,6 +19,7 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <functional>
 
 namespace Anki {
 namespace Util {

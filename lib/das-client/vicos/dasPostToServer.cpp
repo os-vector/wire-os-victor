@@ -17,6 +17,7 @@
 
 #include <curl/curl.h>
 #include <vector>
+#include <memory>
 
 // Log options
 #define ENABLE_LOGE 1

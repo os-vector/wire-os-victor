@@ -16,6 +16,7 @@
 #include "coretech/common/engine/utils/data/dataScope.h"
 #include "json/json-forwards.h"
 #include <string>
+#include <memory>
 
 namespace Anki {
 namespace Util {

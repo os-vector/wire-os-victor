@@ -11,6 +11,7 @@
 
 #include "util/logging/logging.h"
 #include "util/math/math.h"
+#include <algorithm>
 
 namespace {
   constexpr float kDurationScalarMin = 0.05f;

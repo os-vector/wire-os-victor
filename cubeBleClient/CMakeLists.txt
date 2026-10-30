@@ -35,6 +35,10 @@ PRIVATE
   ${ASAN_LINKER_FLAGS}
 )
 
+if (VICOS)
+  target_link_options(cubeBleClient PRIVATE -Wl,-Bsymbolic-functions)
+endif()
+
 anki_build_strip(TARGET cubeBleClient)
 
 target_compile_definitions(cubeBleClient

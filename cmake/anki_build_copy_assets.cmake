@@ -150,7 +150,7 @@ function(anki_build_copydirectory_assets)
     set(multiValueArgs OUT_SRCS OUT_DSTS OUT_RELATIVE_DSTS)
     cmake_parse_arguments(cpassets "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
-    file(GLOB_RECURSE SRCS
+    file(GLOB_RECURSE SRCS CONFIGURE_DEPENDS
          LIST_DIRECTORIES false
          RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}/${cpassets_SRCLIST_DIR}
          ${CMAKE_CURRENT_SOURCE_DIR}/${cpassets_SRCLIST_DIR}/*)

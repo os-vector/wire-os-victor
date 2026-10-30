@@ -21,6 +21,7 @@
 #include "util/signals/simpleSignal_fwd.h"
 
 #include <deque>
+#include <functional>
 
 namespace Anki {
 namespace Vector {

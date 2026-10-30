@@ -13,6 +13,7 @@
 #include "util/helpers/includeSstream.h"
 #include <assert.h>
 #include <stdint.h>
+#include <functional>
 
 namespace Anki{ namespace Util
 {

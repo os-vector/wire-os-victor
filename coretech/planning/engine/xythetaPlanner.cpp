@@ -20,6 +20,7 @@
 #include <assert.h>
 #include <iostream>
 #include <unordered_set>
+#include <chrono>
 
 
 namespace Anki {

@@ -15,6 +15,7 @@
 
 #include "util/entityComponent/iManageableComponent.h"
 #include "util/logging/logging.h"
+#include <memory>
 
 namespace Anki {
 

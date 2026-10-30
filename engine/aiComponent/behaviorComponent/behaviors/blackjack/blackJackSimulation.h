@@ -15,6 +15,7 @@
 
 #include <string>
 #include <vector>
+#include <memory>
 
 // Fwd Declarations
 namespace Anki{

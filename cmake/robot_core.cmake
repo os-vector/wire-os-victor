@@ -1,8 +1,8 @@
 if (VICOS)
   if(NOT TARGET robot_core)
 
-  file(GLOB ROBOT_CORE_SRCS ${CMAKE_SOURCE_DIR}/robot/core/src/*.c)
-  file(GLOB ROBOT_CORE_INCS ${CMAKE_SOURCE_DIR}/robot/core/inc/*.h)
+  file(GLOB ROBOT_CORE_SRCS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/robot/core/src/*.c)
+  file(GLOB ROBOT_CORE_INCS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/robot/core/inc/*.h)
 
   set(ROBOT_CORE_LIBS
     robot_core

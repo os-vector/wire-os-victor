@@ -20,6 +20,7 @@
 #include "util/helpers/includeSstream.h"
 #include "util/stringTable/stringID.h"
 #include <string>
+#include <functional>
 
 namespace Anki{ namespace Util
 {

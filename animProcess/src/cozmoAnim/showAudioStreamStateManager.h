@@ -16,6 +16,8 @@
 #include "clad/robotInterface/messageEngineToRobot.h"
 #include "coretech/common/shared/types.h"
 #include "cozmoAnim/animContext.h"
+#include <functional>
+#include <mutex>
 
 namespace Anki {
 namespace Vector {

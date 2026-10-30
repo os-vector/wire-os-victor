@@ -20,6 +20,7 @@
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <algorithm>
 
 using namespace std;
 

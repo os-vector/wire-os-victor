@@ -25,6 +25,7 @@
 #include "proto/external_interface/settings.pb.h"
 
 #include "json/json.h"
+#include <functional>
 
 namespace Anki {
 namespace Vector {

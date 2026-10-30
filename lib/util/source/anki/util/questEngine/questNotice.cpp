@@ -12,6 +12,7 @@
  **/
 
 #include "util/questEngine/questNotice.h"
+#include <ctime>
 
 namespace Anki {
 namespace Util {

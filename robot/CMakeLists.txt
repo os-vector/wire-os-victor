@@ -50,6 +50,8 @@ target_include_directories(robot_hal
   $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/robot/hal/sim/include>
 )
 
+add_dependencies(robot_hal anki_build_info)
+
 target_compile_options(robot_hal
   PRIVATE
   ${ANKI_BUILD_CXX_COMPILE_OPTIONS}

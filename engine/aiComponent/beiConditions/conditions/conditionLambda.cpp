@@ -13,6 +13,7 @@
  **/
 
 #include "engine/aiComponent/beiConditions/conditions/conditionLambda.h"
+#include <functional>
 
 namespace Anki {
 namespace Vector {

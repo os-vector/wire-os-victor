@@ -11,6 +11,7 @@
 #define __victor_dasmgr_dasConfig_h
 
 #include <string>
+#include <memory>
 
 // Forward declarations
 namespace Json {

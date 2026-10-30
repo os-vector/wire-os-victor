@@ -11,6 +11,8 @@
 
 #include "engine/vision/visionModeSet.h"
 #include "engine/vision/visionModesHelpers.h"
+#include <iterator>
+#include <algorithm>
 
 namespace Anki {
 namespace Vector {

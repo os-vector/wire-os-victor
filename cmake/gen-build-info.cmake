@@ -1,0 +1,29 @@
+execute_process(
+  COMMAND git -c safe.directory=${ANKI_SOURCE_DIR} rev-parse --short HEAD
+  WORKING_DIRECTORY ${ANKI_SOURCE_DIR}
+  OUTPUT_VARIABLE ANKI_BUILD_SHA
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+execute_process(
+  COMMAND git -c safe.directory=${ANKI_SOURCE_DIR} rev-parse --abbrev-ref HEAD
+  WORKING_DIRECTORY ${ANKI_SOURCE_DIR}
+  OUTPUT_VARIABLE ANKI_BUILD_BRANCH
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+file(CONFIGURE OUTPUT "${ANKI_BUILD_INFO_DIR}/ankiBuildSha.h" CONTENT
+"#pragma once
+#define ANKI_BUILD_SHA \"${ANKI_BUILD_SHA}\"
+#define ANKI_BUILD_BRANCH \"${ANKI_BUILD_BRANCH}\"
+")
+
+if (DEFINED ENV{ANKI_BUILD_VICTOR_REV})
+  set(ANKI_BUILD_VICTOR_REV $ENV{ANKI_BUILD_VICTOR_REV})
+else()
+  set(ANKI_BUILD_VICTOR_REV ${ANKI_BUILD_SHA})
+endif()
+
+configure_file(${ANKI_SOURCE_DIR}/templates/cmake/revision.in
+               ${ANKI_REVISION_FILE}
+               @ONLY)
