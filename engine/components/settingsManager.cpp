@@ -480,7 +480,11 @@ namespace Anki
         const auto &presetColor = _currentSettings[presetEyeColorKey].asUInt();
         if (!external_interface::EyeColor_IsValid(presetColor))
         {
-          LOG_ERROR("SettingsManager.ApplySettingEyeColor.Invalid", "Invalid eye color value %i", presetColor);
+          LOG_ERROR("SettingsManager.ApplySettingEyeColor.Invalid", "Invalid eye color value %i, setting eye color to TIP_OVER_TEAL", presetColor);
+          bool ignoredDueToNoChange = false;
+          SetRobotSetting(external_interface::RobotSetting::eye_color,
+                                                           Json::Value(0),
+                                                           true, ignoredDueToNoChange);
           return false;
         }
       }
