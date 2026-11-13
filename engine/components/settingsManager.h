@@ -109,6 +109,7 @@ private:
   bool ApplyRobotSetting(const external_interface::RobotSetting robotSetting, bool force = true);
   bool ApplySettingMasterVolume();
   bool ApplySettingEyeColor();
+  bool ApplySettingCustomEyeColor();
   bool ApplySettingLocale();
   bool ApplySettingTimeZone();
   bool ApplySettingButtonWakeWord();
