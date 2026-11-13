@@ -87,12 +87,12 @@ namespace Anki
       {
         if (IsSettingsUpdateRequestPending(external_interface::RobotSetting::eye_color))
         {
-          ApplyPendingSettingsUpdate(external_interface::RobotSetting::eye_color, false);
+          ApplyPendingSettingsUpdate(external_interface::RobotSetting::eye_color, true);
         }
 
         if (IsSettingsUpdateRequestPending(external_interface::RobotSetting::custom_eye_color))
         {
-          ApplyPendingSettingsUpdate(external_interface::RobotSetting::custom_eye_color, false);
+          ApplyPendingSettingsUpdate(external_interface::RobotSetting::custom_eye_color, true);
         }
       } }));
       }
