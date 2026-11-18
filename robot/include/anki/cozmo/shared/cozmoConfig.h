@@ -347,7 +347,7 @@ namespace Vector {
     struct stat buffer;
 
     if (!initialized) {
-      value = (stat("/data/data/rebuild/using-60-fps", &buffer) == 0);
+      value = (stat("/data/data/using-60-fps", &buffer) == 0);
       initialized = true;
     }
 
