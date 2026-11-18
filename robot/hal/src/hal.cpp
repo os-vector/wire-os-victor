@@ -78,7 +78,9 @@ namespace { // "Private members"
   // Counter for invalid prox sensor readings
   u32 invalidProxSensorStatusCounts_[(int)RangeStatus::HARDWARE_FAIL + 1] = {0};
   u32 noUpdateProxSensorStatusCount_ = 0;
+#ifndef STANDALONE_SIM
   TimeStamp_t nextInvalidProxDataReportSendTime_ms_ = 0;
+#endif
   const u32 INVALID_PROX_DATA_REPORT_PERIOD_MS = 86400000; // Every 24 hours
 
   HAL::PowerState desiredPowerMode_;
@@ -86,8 +88,10 @@ namespace { // "Private members"
   // Flag to prevent spamming of unexpected power mode warning
   bool reportUnexpectedPowerMode_ = false;
 
+#ifndef STANDALONE_SIM
   // Time since the desired power mode was last set
   TimeStamp_t lastPowerSetModeTime_ms_ = 0;
+#endif
 
   // Last time a HeadToBody frame was sent
   TimeStamp_t lastH2BSendTime_ms_ = 0;
@@ -587,7 +591,9 @@ void ReportRecentInvalidProxDataReadings()
     DASMSG_SEND();
   }
 
+#ifndef STANDALONE_SIM
   nextInvalidProxDataReportSendTime_ms_ += INVALID_PROX_DATA_REPORT_PERIOD_MS;
+#endif
   memset(invalidProxSensorStatusCounts_, 0, sizeof(invalidProxSensorStatusCounts_));
   noUpdateProxSensorStatusCount_ = 0;
 }
@@ -1255,7 +1261,9 @@ void HAL::PowerSetDesiredMode(const PowerState state)
   DASMSG_SET(i2, HAL::BatteryGetTemperature_C(), "Battery temperature (C)");
   DASMSG_SEND();
   desiredPowerMode_ = state;
+#ifndef STANDALONE_SIM
   lastPowerSetModeTime_ms_ = HAL::GetTimeStamp();
+#endif
 }
 
 HAL::PowerState HAL::PowerGetDesiredMode()

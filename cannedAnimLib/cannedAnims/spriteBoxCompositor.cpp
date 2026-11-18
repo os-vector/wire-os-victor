@@ -198,7 +198,7 @@ Result SpriteBoxCompositor::AddFullFaceSpriteSeqInternal(const Vision::SpritePat
   // "end" keyframes going forward. 
   Vision::SpriteBoxKeyFrame clearKeyFrame(startKeyFrame);
   clearKeyFrame.assetID = Vision::SpritePathMap::kClearSpriteBoxID;
-  clearKeyFrame.triggerTime_ms += spriteSeqContainer.GetSpriteSequence(assetID)->GetNumFrames() * ANIM_TIME_STEP_MS;
+  clearKeyFrame.triggerTime_ms += spriteSeqContainer.GetSpriteSequence(assetID)->GetNumFrames() * SPRITE_TIME_STEP_MS;
 
   Result addKeyFrameResult = AddKeyFrameInternal(std::move(startKeyFrame));
   if( Result::RESULT_OK != addKeyFrameResult ){
@@ -419,7 +419,7 @@ bool SpriteBoxCompositor::PopulateCompositeImage(Vision::SpriteCache& spriteCach
     // Get a SpriteHandle to the image we want to display
     Vision::SpriteHandle spriteHandle;
     if(spriteSeqContainer.IsValidSpriteSequenceID(currentKeyFrame.assetID)){
-      const uint16_t frameIdx = (timeSinceAnimStart_ms - currentKeyFrame.triggerTime_ms) / ANIM_TIME_STEP_MS;
+      const uint16_t frameIdx = (timeSinceAnimStart_ms - currentKeyFrame.triggerTime_ms) / SPRITE_TIME_STEP_MS;
       const Vision::SpriteSequence& sequence = 
         *spriteSeqContainer.GetSpriteSequence(currentKeyFrame.assetID);
 

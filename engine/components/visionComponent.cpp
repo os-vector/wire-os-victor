@@ -1504,7 +1504,7 @@ namespace Vector {
       // Just display the mirror mode image as is, from the processing result
       const bool kInterruptRunning = false;
       animComponent.DisplayFaceImage(mirrorModeImg,
-				     AnimationComponent::DEFAULT_STREAMING_FACE_DURATION_MS,
+				     animComponent.DEFAULT_STREAMING_FACE_DURATION_MS,
 				     kInterruptRunning);
     }
     return RESULT_OK;
