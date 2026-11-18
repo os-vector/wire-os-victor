@@ -87,12 +87,12 @@ namespace Anki
       {
         if (IsSettingsUpdateRequestPending(external_interface::RobotSetting::eye_color))
         {
-          ApplyPendingSettingsUpdate(external_interface::RobotSetting::eye_color, false);
+          ApplyPendingSettingsUpdate(external_interface::RobotSetting::eye_color, true);
         }
 
         if (IsSettingsUpdateRequestPending(external_interface::RobotSetting::custom_eye_color))
         {
-          ApplyPendingSettingsUpdate(external_interface::RobotSetting::custom_eye_color, false);
+          ApplyPendingSettingsUpdate(external_interface::RobotSetting::custom_eye_color, true);
         }
       } }));
       }
@@ -173,7 +173,7 @@ namespace Anki
       // Register the actual setting application methods, for those settings that want to execute code when changed:
       _settingSetters[external_interface::RobotSetting::master_volume] = {false, &SettingsManager::ValidateSettingMasterVolume, &SettingsManager::ApplySettingMasterVolume};
       _settingSetters[external_interface::RobotSetting::eye_color] = {true, &SettingsManager::ValidateSettingEyeColor, &SettingsManager::ApplySettingEyeColor};
-      _settingSetters[external_interface::RobotSetting::custom_eye_color] = {true, &SettingsManager::ValidateSettingEyeColor, &SettingsManager::ApplySettingEyeColor};
+      _settingSetters[external_interface::RobotSetting::custom_eye_color] = {true, &SettingsManager::ValidateSettingEyeColor, &SettingsManager::ApplySettingCustomEyeColor};
       _settingSetters[external_interface::RobotSetting::locale] = {false, &SettingsManager::ValidateSettingLocale, &SettingsManager::ApplySettingLocale};
       _settingSetters[external_interface::RobotSetting::time_zone] = {false, nullptr, &SettingsManager::ApplySettingTimeZone};
       _settingSetters[external_interface::RobotSetting::default_location] = {false, &SettingsManager::ValidateSettingDefaultLocation, nullptr};
@@ -503,19 +503,29 @@ namespace Anki
       return true;
     }
 
-    // Wire (kercre123) - Rainbow Eyes
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    bool SettingsManager::ApplySettingCustomEyeColor()
+    {
+      static const std::string &customEyeColorKey = RobotSetting_Name(external_interface::RobotSetting::custom_eye_color);
+      const Json::Value customEyeColor = _currentSettings[customEyeColorKey];
+      const auto &isUsingCustomColor = customEyeColor[kCustomEyeColorEnabledKey].asBool();
+      float hue, saturation;
+      if (isUsingCustomColor) {
+        hue = customEyeColor[kCustomEyeColorHueKey].asFloat();
+        saturation = customEyeColor[kCustomEyeColorSaturationKey].asFloat();
+        LOG_INFO("SettingsManager.ApplySettingEyeColor.Apply", "Setting custom eye color to Hue: %f, Sat: %f", hue, saturation);
+        _robot->SendRobotMessage<RobotInterface::SetFaceHue>(hue);
+        _robot->SendRobotMessage<RobotInterface::SetFaceSaturation>(saturation);
+      }
+      return true;
+    }
 
     bool SettingsManager::ApplySettingEyeColor()
     {
       static const std::string &key = RobotSetting_Name(external_interface::RobotSetting::eye_color);
-      static const std::string &customEyeColorKey = RobotSetting_Name(external_interface::RobotSetting::custom_eye_color);
-      const Json::Value customEyeColor = _currentSettings[customEyeColorKey];
-      const auto &isUsingCustomColor = customEyeColor[kCustomEyeColorEnabledKey].asBool();
 
       float hue, saturation;
 
-      // stop the rainbow thread if it's active
+      // stop the rainbow eyes thread if it's active
       if (_rainbowEyeThread.joinable())
       {
         _stopRainbowEyeThread.store(true, std::memory_order_release);
@@ -524,62 +534,56 @@ namespace Anki
         _stopRainbowEyeThread.store(false, std::memory_order_release); // Reset the flag for future use
       }
 
-      if (!isUsingCustomColor)
+      const std::string rainbowEyesStr = "RAINBOW_EYES";
+      const auto &value = _currentSettings[key].asUInt();
+      const auto &eyeColorName = EyeColor_Name(static_cast<external_interface::EyeColor>(value));
+      LOG_INFO("SettingsManager.ApplySettingEyeColor.Apply", "Setting robot eye color to %s", eyeColorName.c_str());
+
+      // Wire (kercre123) - Rainbow Eyes
+      // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      if (eyeColorName == rainbowEyesStr)
       {
-        const std::string rainbowEyesStr = "RAINBOW_EYES";
-        const auto &value = _currentSettings[key].asUInt();
-        const auto &eyeColorName = EyeColor_Name(static_cast<external_interface::EyeColor>(value));
-        LOG_INFO("SettingsManager.ApplySettingEyeColor.Apply", "Setting robot eye color to %s", eyeColorName.c_str());
+        LOG_INFO("SettingsManager.ApplySettingEyeColor.Apply", "Starting Rainbow Eyes thread");
 
-        if (eyeColorName == rainbowEyesStr)
+        // only start the thread if it's not already running
+        if (!_rainbowEyeThread.joinable())
         {
-          LOG_INFO("SettingsManager.ApplySettingEyeColor.Apply", "Starting Rainbow Eyes thread");
+          _rainbowEyeThread = std::thread([this]()
+                                          {
+                  float hue = 0.0f;
+                  while (!_stopRainbowEyeThread.load(std::memory_order_acquire))
+                  {
+                      _robot->SendRobotMessage<RobotInterface::SetFaceHue>(hue);
+                      hue += 0.01f;
+                      if (hue > 1.0f)
+                      {
+                          hue = 0.0f;
+                      }
+                      std::this_thread::sleep_for(std::chrono::milliseconds(30));
 
-          // only start the thread if it's not already running
-          if (!_rainbowEyeThread.joinable())
-          {
-            _rainbowEyeThread = std::thread([this]()
-                                            {
-                    float hue = 0.0f;
-                    while (!_stopRainbowEyeThread.load(std::memory_order_acquire))
-                    {
-                        _robot->SendRobotMessage<RobotInterface::SetFaceHue>(hue);
-                        hue += 0.01f;
-                        if (hue > 1.0f)
-                        {
-                            hue = 0.0f;
-                        }
-                        std::this_thread::sleep_for(std::chrono::milliseconds(30));
-
-                        // Check if "RAINBOW_EYES" mode is still active by checking the setting
-                        const std::string rainbowEyesStrInTh = "RAINBOW_EYES";
-                        const auto& eyeval = _currentSettings[key].asUInt();
-                        const auto& currentHueKey = EyeColor_Name(static_cast<external_interface::EyeColor>(eyeval));
-                        if (currentHueKey != rainbowEyesStrInTh)
-                        {
-                            LOG_INFO("SettingsManager.ApplySettingEyeColor.Apply", "Stopping Rainbow Eyes thread");
-                            _stopRainbowEyeThread.store(true, std::memory_order_release);
-                            break;
-                        }
-                    } });
-          }
-
-          return true;
+                      // Check if "RAINBOW_EYES" mode is still active by checking the setting
+                      const std::string rainbowEyesStrInTh = "RAINBOW_EYES";
+                      const auto& eyeval = _currentSettings[key].asUInt();
+                      const auto& currentHueKey = EyeColor_Name(static_cast<external_interface::EyeColor>(eyeval));
+                      if (currentHueKey != rainbowEyesStrInTh)
+                      {
+                          LOG_INFO("SettingsManager.ApplySettingEyeColor.Apply", "Stopping Rainbow Eyes thread");
+                          _stopRainbowEyeThread.store(true, std::memory_order_release);
+                          break;
+                      }
+                  } });
         }
-        else
-        {
-          LOG_INFO("SettingsManager.ApplySettingEyeColor.Apply", "Setting robot eye color to %s", eyeColorName.c_str());
 
-          const auto &config = _robot->GetContext()->GetDataLoader()->GetEyeColorConfig();
-          const auto &eyeColorData = config[eyeColorName];
-          hue = eyeColorData["Hue"].asFloat();
-          saturation = eyeColorData["Saturation"].asFloat();
-        }
+        return true;
       }
       else
       {
-        hue = customEyeColor[kCustomEyeColorHueKey].asFloat();
-        saturation = customEyeColor[kCustomEyeColorSaturationKey].asFloat();
+        LOG_INFO("SettingsManager.ApplySettingEyeColor.Apply", "Setting robot eye color to %s", eyeColorName.c_str());
+
+        const auto &config = _robot->GetContext()->GetDataLoader()->GetEyeColorConfig();
+        const auto &eyeColorData = config[eyeColorName];
+        hue = eyeColorData["Hue"].asFloat();
+        saturation = eyeColorData["Saturation"].asFloat();
       }
 
       _robot->SendRobotMessage<RobotInterface::SetFaceHue>(hue);
