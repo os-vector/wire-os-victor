@@ -11,6 +11,7 @@
 
 #include <math.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 #include "anki/cozmo/shared/factory/emrHelper.h"
 
 namespace Anki {
@@ -186,7 +187,7 @@ namespace Vector {
   const u16 DEFAULT_CAMERA_RESOLUTION_HEIGHT =  IsCozmoBody() ? 240 : (IsXray() ? 600 : 360);
 
   const u16 CAMERA_SENSOR_RESOLUTION_WIDTH  = IsCozmoBody() ? 640 : (IsXray() ? 1600: 1280);
-  const u16 CAMERA_SENSOR_RESOLUTION_HEIGHT = IsCozmoBody() ? 480 : (IsXray() ?1200: 720);
+  const u16 CAMERA_SENSOR_RESOLUTION_HEIGHT = IsCozmoBody() ? 480 : (IsXray() ? 1200: 720);
   
   const f32 MIN_CAMERA_EXPOSURE_TIME_MS = 1;
   const f32 MAX_CAMERA_EXPOSURE_TIME_MS = 66;
@@ -340,9 +341,23 @@ namespace Vector {
   // how long there is between stopping the motors and issuing a cliff event (because we have decided there isn't a pickup event)
   const u32 CLIFF_EVENT_DELAY_MS = 500;
   
+  inline bool& _using60fps() {
+    static bool initialized = false;
+    static bool value = false;
+    struct stat buffer;
+
+    if (!initialized) {
+      value = (stat("/data/data/using-60-fps", &buffer) == 0);
+      initialized = true;
+    }
+
+    return value;
+  }
+
   // Anim process timing consts
-  const u32 ANIM_TIME_STEP_MS = 33;
+  const u32 ANIM_TIME_STEP_MS = _using60fps() ? 16 : 33;
   const u32 ANIM_TIME_STEP_US = ANIM_TIME_STEP_MS * 1000;
+  const u32 SPRITE_TIME_STEP_MS = 33;
   const s32 ANIM_OVERTIME_WARNING_THRESH_MS = 5;
   const s32 ANIM_OVERTIME_WARNING_THRESH_US = ANIM_OVERTIME_WARNING_THRESH_MS * 1000;
   
@@ -363,8 +378,10 @@ namespace Vector {
   
   // Packet headers/footers:
   // TODO: Do we need this?  Only used in simulation I think? (Add #ifdef SIMULATOR?)
+#if defined(SIMULATOR) || defined(STANDALONE_SIM)
   const u8 RADIO_PACKET_HEADER[2] = {0xBE, 0xEF};
   const u8 RADIO_PACKET_FOOTER[2] = {0xFF, 0x0F};
+#endif
   
   // The base listening port for robot UDP server.
   // Each robot listens on port (ROBOT_RADIO_BASE_PORT + ROBOT_ID)

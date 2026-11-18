@@ -162,7 +162,7 @@ public:
   // Note: If you're streaming a real-time sequence, the rate at which you stream should also approximately
   // match the duration. e.g. If you're streaming one image every engine tick, then the duration should be
   // 2 x ANIM_TIME_STEP_MS which is roughly equal to BS_TIME_STEP_MS. For convenience you can use this.
-  static constexpr u32 DEFAULT_STREAMING_FACE_DURATION_MS = ANIM_TIME_STEP_MS * ( (BS_TIME_STEP_MS % ANIM_TIME_STEP_MS == 0) ?
+  u32 DEFAULT_STREAMING_FACE_DURATION_MS = ANIM_TIME_STEP_MS * ( (BS_TIME_STEP_MS % ANIM_TIME_STEP_MS == 0) ?
                                                                                   (BS_TIME_STEP_MS / ANIM_TIME_STEP_MS)      :
                                                                                   (BS_TIME_STEP_MS / ANIM_TIME_STEP_MS) + 1 );
   // (Didn't use the obvious 'ceil' function here because it's non-const and can't
