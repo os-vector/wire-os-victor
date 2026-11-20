@@ -2666,20 +2666,22 @@ func (service *rpcService) EnableMirrorMode(ctx context.Context, request *extint
 // Capture a single image using the camera
 func (service *rpcService) CaptureSingleImage(ctx context.Context, request *extint.CaptureSingleImageRequest) (*extint.CaptureSingleImageResponse, error) {
 	// Enable image stream
-	_, err := service.EnableImageStreaming(nil, &extint.EnableImageStreamingRequest{
+	_, err := service.EnableImageStreaming(ctx, &extint.EnableImageStreamingRequest{
 		Enable:               true,
 		EnableHighResolution: request.EnableHighResolution,
 	})
 
 	if err != nil {
+		if ctx.Err() != nil {
+			// The caller left before the engine answered. The request has already been
+			// written, so take it back.
+			service.disableImageStreamingForFeed()
+		}
 		return nil, err
 	}
 
 	// Disable image stream
-	defer service.EnableImageStreaming(nil, &extint.EnableImageStreamingRequest{
-		Enable:               false,
-		EnableHighResolution: false,
-	})
+	defer service.disableImageStreamingForFeed()
 
 	f, cameraFeedChannel := engineProtoManager.CreateChannel(&extint.GatewayWrapper_ImageChunk{}, 1024)
 	defer f()
@@ -2691,24 +2693,31 @@ func (service *rpcService) CaptureSingleImage(ctx context.Context, request *exti
 		Size:    0,
 	}
 
-	for result := range cameraFeedChannel {
-		imageChunk := result.GetImageChunk()
-		readyToSend := UnpackCameraImageChunk(imageChunk, &cache)
-		if readyToSend {
-			capturedSingleImage := &extint.CaptureSingleImageResponse{
-				FrameTimeStamp: imageChunk.GetFrameTimeStamp(),
-				ImageId:        uint32(cache.ImageId),
-				ImageEncoding:  imageChunk.GetImageEncoding(),
-				Data:           cache.Data[0:cache.Size],
+	for {
+		select {
+		case <-ctx.Done():
+			// The caller has gone; see CameraFeed for why this must not wait for an image.
+			return nil, ctx.Err()
+		case result, ok := <-cameraFeedChannel:
+			if !ok {
+				errMsg := "ImageChunk engine stream died unexpectedly"
+				log.Errorln(errMsg)
+				return nil, grpc.Errorf(codes.Internal, errMsg)
 			}
-			capturedSingleImage.Status = &extint.ResponseStatus{Code: extint.ResponseStatus_RESPONSE_RECEIVED}
-			return capturedSingleImage, nil
+			imageChunk := result.GetImageChunk()
+			readyToSend := UnpackCameraImageChunk(imageChunk, &cache)
+			if readyToSend {
+				capturedSingleImage := &extint.CaptureSingleImageResponse{
+					FrameTimeStamp: imageChunk.GetFrameTimeStamp(),
+					ImageId:        uint32(cache.ImageId),
+					ImageEncoding:  imageChunk.GetImageEncoding(),
+					Data:           cache.Data[0:cache.Size],
+				}
+				capturedSingleImage.Status = &extint.ResponseStatus{Code: extint.ResponseStatus_RESPONSE_RECEIVED}
+				return capturedSingleImage, nil
+			}
 		}
 	}
-
-	errMsg := "ImageChunk engine stream died unexpectedly"
-	log.Errorln(errMsg)
-	return nil, grpc.Errorf(codes.Internal, errMsg)
 }
 
 // TODO VIC-11579 Support specifying streaming resolution
@@ -2725,17 +2734,44 @@ func (service *rpcService) EnableImageStreaming(ctx context.Context, request *ex
 		return nil, err
 	}
 
-	payload, ok := <-responseChan
-	if !ok {
-		return nil, grpc.Errorf(codes.Internal, "Failed to retrieve message")
+	// The engine only answers once an image has been processed with (or without) the streaming
+	// vision mode, which does not happen while the robot is asleep. A caller that has given up
+	// must not keep this handler waiting for that. A nil context waits as before.
+	var done <-chan struct{}
+	if ctx != nil {
+		done = ctx.Done()
 	}
 
-	response := payload.GetEnableImageStreamingResponse()
-	response.Status = &extint.ResponseStatus{
-		Code: extint.ResponseStatus_RESPONSE_RECEIVED,
-	}
+	select {
+	case payload, ok := <-responseChan:
+		if !ok {
+			return nil, grpc.Errorf(codes.Internal, "Failed to retrieve message")
+		}
 
-	return response, nil
+		response := payload.GetEnableImageStreamingResponse()
+		response.Status = &extint.ResponseStatus{
+			Code: extint.ResponseStatus_RESPONSE_RECEIVED,
+		}
+
+		return response, nil
+	case <-done:
+		return nil, ctx.Err()
+	}
+}
+
+// How long CameraFeed waits for the engine to confirm that image streaming is off again.
+var cameraFeedDisableTimeout = 5 * time.Second
+
+// disableImageStreamingForFeed switches image streaming off when a camera feed ends. The request
+// is written first; the wait for the engine's answer is bounded so that a feed which ends while
+// the robot is asleep does not leave its handler behind.
+func (service *rpcService) disableImageStreamingForFeed() {
+	ctx, cancel := context.WithTimeout(context.Background(), cameraFeedDisableTimeout)
+	defer cancel()
+	service.EnableImageStreaming(ctx, &extint.EnableImageStreamingRequest{
+		Enable:               false,
+		EnableHighResolution: false,
+	})
 }
 
 // indicates if image streaming is enabled or not
@@ -2820,21 +2856,25 @@ func UnpackCameraImageChunk(imageChunk *extint.ImageChunk, cache *CameraFeedCach
 
 // Long running message for sending camera feed to listening sdk users
 func (service *rpcService) CameraFeed(in *extint.CameraFeedRequest, stream extint.ExternalInterface_CameraFeedServer) error {
+	ctx := stream.Context()
+
 	// Enable video stream. The video stream only uses the default image resolution.
-	_, err := service.EnableImageStreaming(nil, &extint.EnableImageStreamingRequest{
+	_, err := service.EnableImageStreaming(ctx, &extint.EnableImageStreamingRequest{
 		Enable:               true,
 		EnableHighResolution: false,
 	})
 
 	if err != nil {
+		if ctx.Err() != nil {
+			// The client left before the engine answered. The request has already been
+			// written, so take it back.
+			service.disableImageStreamingForFeed()
+		}
 		return err
 	}
 
 	// Disable video stream
-	defer service.EnableImageStreaming(nil, &extint.EnableImageStreamingRequest{
-		Enable:               false,
-		EnableHighResolution: false,
-	})
+	defer service.disableImageStreamingForFeed()
 
 	f, cameraFeedChannel := engineProtoManager.CreateChannel(&extint.GatewayWrapper_ImageChunk{}, 1024)
 	defer f()
@@ -2846,32 +2886,42 @@ func (service *rpcService) CameraFeed(in *extint.CameraFeedRequest, stream extin
 		Size:    0,
 	}
 
-	for result := range cameraFeedChannel {
-
-		imageChunk := result.GetImageChunk()
-		readyToSend := UnpackCameraImageChunk(imageChunk, &cache)
-		if readyToSend {
-			cameraFeedResponse := &extint.CameraFeedResponse{
-				FrameTimeStamp: imageChunk.GetFrameTimeStamp(),
-				ImageId:        uint32(cache.ImageId),
-				ImageEncoding:  imageChunk.GetImageEncoding(),
-				Data:           cache.Data[0:cache.Size],
+	for {
+		select {
+		case <-ctx.Done():
+			// The client has gone. Without this case the handler only notices at the next
+			// complete image, so a feed that ends while no images are flowing (a robot that is
+			// asleep or waking) stays parked, and then switches image streaming off under
+			// whichever client asks for the camera next.
+			return ctx.Err()
+		case result, ok := <-cameraFeedChannel:
+			if !ok {
+				errMsg := "ImageChunk engine stream died unexpectedly"
+				log.Errorln(errMsg)
+				return grpc.Errorf(codes.Internal, errMsg)
 			}
-			ResetCameraCache(&cache)
 
-			if err := stream.Send(cameraFeedResponse); err != nil {
-				return err
-			} else if err = stream.Context().Err(); err != nil {
-				// This is the case where the user disconnects the stream
-				// We should still return the err in case the user doesn't think they disconnected
-				return err
+			imageChunk := result.GetImageChunk()
+			readyToSend := UnpackCameraImageChunk(imageChunk, &cache)
+			if readyToSend {
+				cameraFeedResponse := &extint.CameraFeedResponse{
+					FrameTimeStamp: imageChunk.GetFrameTimeStamp(),
+					ImageId:        uint32(cache.ImageId),
+					ImageEncoding:  imageChunk.GetImageEncoding(),
+					Data:           cache.Data[0:cache.Size],
+				}
+				ResetCameraCache(&cache)
+
+				if err := stream.Send(cameraFeedResponse); err != nil {
+					return err
+				} else if err = stream.Context().Err(); err != nil {
+					// This is the case where the user disconnects the stream
+					// We should still return the err in case the user doesn't think they disconnected
+					return err
+				}
 			}
 		}
 	}
-
-	errMsg := "ImageChunk engine stream died unexpectedly"
-	log.Errorln(errMsg)
-	return grpc.Errorf(codes.Internal, errMsg)
 }
 
 func ReadStringFromFile(filename string, defaultValue string) string {
