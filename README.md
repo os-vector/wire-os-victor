@@ -180,7 +180,7 @@ sudo apt install qemu-user-static qemu-user-binfmt libasound2-dev libopus-dev
 sudo systemctl restart systemd-binfmt.service
 
 # Fedora
-sudo dnf install qemu-user-static qemu-user-binfmt alsa-lib opus
+sudo dnf install qemu-user-static qemu-user-binfmt alsa-lib opus-devel
 sudo systemctl restart systemd-binfmt.service
 ```
 
